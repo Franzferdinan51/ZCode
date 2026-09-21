@@ -128,6 +128,20 @@ export function applyLmStudioCatalogToProviderLayer(
   });
 }
 
+/**
+ * Move one configured model id to the front of a merged catalog. Exact match
+ * only, and the id must already be listed: a typo in LM_STUDIO_MODEL never
+ * invents a model the server does not serve, it just keeps catalog order.
+ */
+export function preferLmStudioModelId(
+  modelIds: readonly string[],
+  preferred?: string | null,
+): readonly string[] {
+  const want = preferred?.trim();
+  if (!want || !modelIds.includes(want)) return modelIds;
+  return Object.freeze([want, ...modelIds.filter((modelId) => modelId !== want)]);
+}
+
 export function resolveLmStudioBaseUrl(baseUrl?: string | null): string {
   const trimmed = baseUrl?.trim();
   return trimmed && trimmed.length > 0 ? trimmed.replace(/\/+$/, "") : DEFAULT_LM_STUDIO_BASE_URL;

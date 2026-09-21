@@ -10,12 +10,14 @@ import {
   mergeLmStudioModelCatalog,
   ModelConfigRules,
   parseLmStudioModelsJson,
+  preferLmStudioModelId,
   ProviderConfigMap,
   ProviderConfigResolver,
   resolveInitialModelSelection,
 } from "../../provider/src/index.js";
 import { decodeZCodeBuiltinRelease } from "../../provider-node/src/zcode-builtin-release.js";
 import { fetchLmStudioModelCatalog } from "../../provider-node/src/lm-studio-model-catalog.js";
+import { LmStudioCatalogOverlaySource } from "../../provider-node/src/lm-studio-catalog-source.js";
 import {
   resolveProviderAvailabilityState,
   shouldOpenProviderLoginEntry,
@@ -170,6 +172,159 @@ test("fixture LM Studio HTTP catalog is fetched and parsed by the shipped catalo
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
     );
+  }
+});
+
+test("LM_STUDIO_MODEL preference moves only a listed id to the front", () => {
+  const ids = ["a", "b", "c"];
+  assert.deepEqual([...preferLmStudioModelId(ids, "b")], ["b", "a", "c"]);
+  // Unknown, empty, or missing preference keeps catalog order: never invent an id.
+  assert.deepEqual([...preferLmStudioModelId(ids, "zzz")], ["a", "b", "c"]);
+  assert.deepEqual([...preferLmStudioModelId(ids, undefined)], ["a", "b", "c"]);
+  assert.deepEqual([...preferLmStudioModelId(ids, "  ")], ["a", "b", "c"]);
+  assert.deepEqual([...preferLmStudioModelId(ids, " b ")], ["b", "a", "c"]);
+});
+
+test("catalog fetch starts v1 before v0 resolves (parallel, not sequential)", async () => {
+  let v1Started = false;
+  let v0ResolvedSawV1 = false;
+  const request = (async (url: string) => {
+    if (String(url).includes("/api/v0/models")) {
+      await new Promise((resolve) => setImmediate(resolve));
+      v0ResolvedSawV1 = v1Started;
+      return jsonResponse({ data: [] });
+    }
+    v1Started = true;
+    return jsonResponse({ data: [{ id: "m", object: "model" }] });
+  }) as typeof fetch;
+  const ids = await fetchLmStudioModelCatalog({
+    baseUrl: "http://127.0.0.1:9/v1",
+    request,
+    timeoutMs: 2000,
+  });
+  assert.equal(v0ResolvedSawV1, true);
+  assert.deepEqual([...ids], ["m"]);
+});
+
+test("oversized catalog bodies are discarded instead of parsed", async () => {
+  const big = "x".repeat(4 * 1024 * 1024 + 1);
+  const request = (async () => ({
+    ok: true,
+    headers: { get: () => null },
+    text: async () => big,
+  })) as unknown as typeof fetch;
+  const ids = await fetchLmStudioModelCatalog({
+    baseUrl: "http://127.0.0.1:9/v1",
+    request,
+    timeoutMs: 2000,
+  });
+  assert.deepEqual([...ids], []);
+});
+
+test("a declared huge content-length short-circuits before reading the body", async () => {
+  let textCalls = 0;
+  const request = (async () => ({
+    ok: true,
+    headers: { get: (name: string) => (name === "content-length" ? "999999999" : null) },
+    text: async () => {
+      textCalls += 1;
+      return "{}";
+    },
+  })) as unknown as typeof fetch;
+  const ids = await fetchLmStudioModelCatalog({
+    baseUrl: "http://127.0.0.1:9/v1",
+    request,
+    timeoutMs: 2000,
+  });
+  assert.deepEqual([...ids], []);
+  assert.equal(textCalls, 0);
+});
+
+function jsonResponse(body: unknown) {
+  const text = JSON.stringify(body);
+  return {
+    ok: true,
+    headers: { get: () => null },
+    text: async () => text,
+  };
+}
+
+function overlaySnapshot(providerFields: Record<string, unknown> = {}) {
+  const providers = new Map();
+  providers.set(LM_STUDIO_PROVIDER_ID, {
+    withBuiltinModelIds: (ids: readonly string[]) => ({ modelIds: [...ids] }),
+    ...providerFields,
+  });
+  return { revision: "r", providers };
+}
+
+function overlaySource(
+  fetchCatalog: () => Promise<readonly string[]>,
+  options: Record<string, unknown> = {},
+) {
+  // Single-id catalogs make preferLmStudioModelId a no-op, so these tests are
+  // immune to whatever LM_STUDIO_MODEL the ambient environment carries.
+  return new LmStudioCatalogOverlaySource({
+    inner: {
+      read: async () => overlaySnapshot(),
+      onDidChange: () => () => {},
+    } as never,
+    fetchCatalog: fetchCatalog as never,
+    ...(options as Record<string, never>),
+  });
+}
+
+function overlaidIds(snapshot: { providers: Map<string, { modelIds: string[] }> }): string[] {
+  return snapshot.providers.get(LM_STUDIO_PROVIDER_ID)?.modelIds ?? [];
+}
+
+test("catalog overlay caches reads within the TTL and refetches after it", async () => {
+  let calls = 0;
+  let now = 1_000_000;
+  const source = overlaySource(
+    async () => {
+      calls += 1;
+      return ["m1"];
+    },
+    { cacheTtlMs: 30_000, now: () => now },
+  );
+  const first = (await source.read()) as unknown as Parameters<typeof overlaidIds>[0];
+  const second = (await source.read()) as unknown as Parameters<typeof overlaidIds>[0];
+  assert.equal(calls, 1);
+  assert.deepEqual(overlaidIds(first), ["m1"]);
+  assert.deepEqual(overlaidIds(second), ["m1"]);
+  now += 30_001;
+  await source.read();
+  assert.equal(calls, 2);
+});
+
+test("concurrent overlay reads share one in-flight catalog request", async () => {
+  let calls = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const source = overlaySource(async () => {
+    calls += 1;
+    await gate;
+    return ["m1"];
+  });
+  const pending = [source.read(), source.read()];
+  release();
+  await Promise.all(pending);
+  assert.equal(calls, 1);
+});
+
+test("LM_STUDIO_MODEL moves the configured id to the front of the overlaid catalog", async () => {
+  const savedModel = process.env.LM_STUDIO_MODEL;
+  process.env.LM_STUDIO_MODEL = "want";
+  try {
+    const source = overlaySource(async () => ["a", "want", "b"], { cacheTtlMs: 0 });
+    const snapshot = (await source.read()) as unknown as Parameters<typeof overlaidIds>[0];
+    assert.deepEqual(overlaidIds(snapshot), ["want", "a", "b"]);
+  } finally {
+    if (savedModel === undefined) delete process.env.LM_STUDIO_MODEL;
+    else process.env.LM_STUDIO_MODEL = savedModel;
   }
 });
 

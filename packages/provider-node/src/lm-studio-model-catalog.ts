@@ -14,6 +14,8 @@ export interface FetchLmStudioModelCatalogOptions {
 }
 
 const DEFAULT_TIMEOUT_MS = 1500;
+// 模型列表是小 JSON；超过此上限视为异常服务端，直接丢弃，避免无界 response.json() 撑爆内存。
+const MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
 function authorizationHeader(apiKey?: string | null): Record<string, string> {
   const token =
@@ -32,7 +34,11 @@ async function readJson(
   try {
     const response = await request(url, { headers, signal: controller.signal });
     if (!response.ok) return undefined;
-    return await response.json();
+    const declared = Number(response.headers?.get?.("content-length") ?? Number.NaN);
+    if (Number.isFinite(declared) && declared > MAX_CATALOG_BYTES) return undefined;
+    const text = await response.text();
+    if (text.length > MAX_CATALOG_BYTES) return undefined;
+    return JSON.parse(text) as unknown;
   } catch {
     return undefined;
   } finally {
@@ -43,6 +49,7 @@ async function readJson(
 /**
  * Load the LM Studio picker catalog from `/api/v0/models` when present, then `/v1/models`.
  * Does not start or load models; missing endpoints fall through to the next.
+ * 两个端点并行请求：本地服务任一慢响应不再拖慢整体（约省一半等待时间）。
  */
 export async function fetchLmStudioModelCatalog(
   options: FetchLmStudioModelCatalogOptions = {},
@@ -51,8 +58,10 @@ export async function fetchLmStudioModelCatalog(
   const request = options.request ?? globalThis.fetch;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const headers = authorizationHeader(options.apiKey);
-  const v0 = await readJson(lmStudioV0ModelsUrl(baseUrl), request, headers, timeoutMs);
-  const v1 = await readJson(lmStudioV1ModelsUrl(baseUrl), request, headers, timeoutMs);
+  const [v0, v1] = await Promise.all([
+    readJson(lmStudioV0ModelsUrl(baseUrl), request, headers, timeoutMs),
+    readJson(lmStudioV1ModelsUrl(baseUrl), request, headers, timeoutMs),
+  ]);
   return mergeLmStudioModelCatalog({
     ...(v0 === undefined ? {} : { v0 }),
     ...(v1 === undefined ? {} : { v1 }),
