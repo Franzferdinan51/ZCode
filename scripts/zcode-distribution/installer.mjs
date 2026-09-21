@@ -46,7 +46,11 @@ cleanup() {
 trap cleanup EXIT
 
 ARCHIVE="$TMP_DIR/$TARBALL"
-curl -fL "\${BASE_URL%/}/releases/$VERSION/$TARBALL" -o "$ARCHIVE"
+# GitHub Releases flatten attachments (no releases/<version>/ prefix); fall back
+# to the bare tarball name so a release URL works as BASE_URL too.
+if ! curl -fsSL "\${BASE_URL%/}/releases/$VERSION/$TARBALL" -o "$ARCHIVE" 2>/dev/null; then
+  curl -fL "\${BASE_URL%/}/$TARBALL" -o "$ARCHIVE"
+fi
 
 ACTUAL="$(hash_file "$ARCHIVE")"
 if [ "$ACTUAL" != "$SHA256" ]; then
