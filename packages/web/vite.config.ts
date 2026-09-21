@@ -23,6 +23,21 @@ function resolveZCodeEnv(value: string | undefined): "test" | "production" {
   return value?.trim().toLowerCase() === "production" ? "production" : "test";
 }
 
+// 与 packages/desktop/scripts/desktop-product-identity.mjs 的 resolveDesktopProductFlavor
+// 同语义：本 fork 默认 local 身份（隐藏付费升级入口），显式官方身份才走 production/preview。
+// 不直接 import 那个模块：desktop 脚本目录不是 web 的依赖，架构检查要求配置只用内联规则。
+function resolveWebProductFlavor(
+  env: Record<string, string | undefined>,
+): "production" | "preview" | "local" {
+  if (env.ZCODE_OFFICIAL_IDENTITY?.trim() !== "1") {
+    return "local";
+  }
+  if (env.ZCODE_PREVIEW_IDENTITY?.trim() === "1") {
+    return "preview";
+  }
+  return resolveZCodeEnv(env.ZCODE_ENV) === "production" ? "production" : "preview";
+}
+
 export default defineConfig(({ mode }) => {
   // `.env*` 只提供链接常量；当前产品环境由启动脚本或 CI 注入 ZCODE_ENV。
   // 启动脚本通过 process.env 显式选择 test/production；它必须优先于 .env 文件，
@@ -86,6 +101,7 @@ export default defineConfig(({ mode }) => {
       __ZCODE_VERSION__: JSON.stringify(version),
       __ZCODE_COMMIT__: JSON.stringify(env.ZCODE_COMMIT || "unknown"),
       __ZCODE_ENV__: JSON.stringify(zcodeEnv),
+      __ZCODE_PRODUCT_FLAVOR__: JSON.stringify(resolveWebProductFlavor(env)),
       "import.meta.env.VITE_ZCODE_BASE_URL": JSON.stringify(zcodeEndpointOrigin),
       // 兼容旧 Web runtime 读取名；新代码统一读 VITE_ZCODE_BASE_URL。
       "import.meta.env.VITE_ZCODE_ENDPOINT_ORIGIN": JSON.stringify(zcodeEndpointOrigin),

@@ -16,6 +16,7 @@ import {
   bucketReminderKey,
   getActiveModelBuckets,
 } from "@/v4/startPlanQuotaBuckets.js";
+import { LOCAL_FORK_HIDES_PAID_PLAN_UPSELLS } from "@/lib/localFork.js";
 
 export type SessionQuotaBannerKind =
   | "model-very-low"
@@ -302,5 +303,9 @@ export function resolveQuotaBannerUpgradeProviderId(providerId: string | null): 
  * 花钱就能立刻继续，是误导。权益缺失（`mcp-plan-required`）才是升级能解决的问题。
  */
 export function shouldOfferQuotaBannerUpgrade(kind: SessionQuotaBannerKind | null): boolean {
+  // ZCode Local 没有可升级的套餐：本地模型不存在"花钱续额度"这一说，按钮只会误导。
+  if (LOCAL_FORK_HIDES_PAID_PLAN_UPSELLS) {
+    return false;
+  }
   return kind !== "mcp-quota-exhausted";
 }

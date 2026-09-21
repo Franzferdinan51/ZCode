@@ -33,6 +33,7 @@ import {
   type CodingPlanFunnelContext,
 } from "@/lib/codingPlanFunnelTelemetry.js";
 import { type SidebarUsageCodingPlanProviderId } from "@/lib/sidebarUsageCodingPlanProviderPreference.js";
+import { LOCAL_FORK_HIDES_PAID_PLAN_UPSELLS } from "@/lib/localFork.js";
 import { useEnterpriseCodingPlanProducts } from "@/settings/model-provider-section/useEnterpriseCodingPlanProducts.js";
 import {
   buildCodingPlanUsageSources,
@@ -450,33 +451,36 @@ export function WorkspaceSidebarFooterUsageSummaryContent({
         <BarChart3Icon className="size-4" />
         {intl.formatMessage({ id: "sidebar.usage.plan.openStats" })}
       </DropdownMenuItem>
-      {/* 产品要求：升级入口始终显示；未解析出当前套餐时由当前 provider family 决定品牌。 */}
-      <DropdownMenuItem
-        data-testid={TID_SIDEBAR_CODING_PLAN_UPGRADE_BUTTON}
-        disabled={entryGate.status === "loading"}
-        aria-busy={entryGate.status === "loading"}
-        onSelect={() => {
-          if (entryGate.status !== "ready") {
-            entryGate.retry?.();
-            return;
-          }
-          onUpgradeClick?.(
-            upgradeTargetProviderId,
-            createCodingPlanFunnelContext({
-              providerId: upgradeTargetProviderId,
-              upgradeSource: "profile_menu",
-              eventRegion: "app.profile",
-              eventText: intl.formatMessage({ id: upgradeActionLabelId }),
-              entryPlanState: resolveCodingPlanEntryPlanState({
-                snapshot: upgradeProviderSnapshot,
+      {/* 产品要求：升级入口始终显示；未解析出当前套餐时由当前 provider family 决定品牌。
+          ZCode Local 例外：本 fork 不卖套餐，升级项整个隐藏。 */}
+      {LOCAL_FORK_HIDES_PAID_PLAN_UPSELLS ? null : (
+        <DropdownMenuItem
+          data-testid={TID_SIDEBAR_CODING_PLAN_UPGRADE_BUTTON}
+          disabled={entryGate.status === "loading"}
+          aria-busy={entryGate.status === "loading"}
+          onSelect={() => {
+            if (entryGate.status !== "ready") {
+              entryGate.retry?.();
+              return;
+            }
+            onUpgradeClick?.(
+              upgradeTargetProviderId,
+              createCodingPlanFunnelContext({
+                providerId: upgradeTargetProviderId,
+                upgradeSource: "profile_menu",
+                eventRegion: "app.profile",
+                eventText: intl.formatMessage({ id: upgradeActionLabelId }),
+                entryPlanState: resolveCodingPlanEntryPlanState({
+                  snapshot: upgradeProviderSnapshot,
+                }),
               }),
-            }),
-          );
-        }}
-      >
-        <RocketIcon className="size-4" />
-        {entryGate.label ?? intl.formatMessage({ id: upgradeActionLabelId })}
-      </DropdownMenuItem>
+            );
+          }}
+        >
+          <RocketIcon className="size-4" />
+          {entryGate.label ?? intl.formatMessage({ id: upgradeActionLabelId })}
+        </DropdownMenuItem>
+      )}
     </>
   );
 }
