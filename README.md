@@ -15,11 +15,13 @@ ZCode 是 AI 编程工作台，提供桌面应用、浏览器界面和终端 Age
 
 **本地优先：** 默认推理走本机 [LM Studio](https://lmstudio.ai) 的 OpenAI 兼容接口 `http://127.0.0.1:1234/v1`。在 LM Studio 中自行加载对话模型后即可发消息，不需要 Z.ai / BigModel 登录、API Key、Coding Plan 或试用额度。ZCode 不会代为启动或加载模型。可选云模板仍可在设置里配置，但不再挡住核心路径。
 
+**与官方 ZCode 并排共存：** 本 fork 以 **ZCode Local** 身份发布，不会触碰官方安装——数据目录为 `~/.zcode-local`（可用 `ZCODE_DATA_BASE_DIR` 覆盖），终端命令为 `zcode-local`，deep link 使用 `zcode-local://`，且已禁用官方自动更新。若 LM Studio 服务端开启了鉴权，把 Bearer Token 放到 `LM_STUDIO_API_KEY`（见 `.env.example`）。
+
 | 入口                 | 用途                                                           | 开发命令                       |
 | -------------------- | -------------------------------------------------------------- | ------------------------------ |
 | Desktop              | Electron 桌面应用                                              | `pnpm dev:desktop`             |
 | Web / ZCode 命令行版 | 终端与浏览器工作台；将 TUI、Web、后端和 Agent 组装为独立运行包 | `pnpm dev:web`                 |
-| Agent CLI            | 在终端中使用 `zcode`，也为 Desktop 和 Web 提供 Agent 运行时    | `pnpm --filter @zcode/cli dev` |
+| Agent CLI            | 在终端中使用 `zcode-local`，也为 Desktop 和 Web 提供 Agent 运行时 | `pnpm --filter @zcode/cli dev` |
 
 ## 初始化
 
@@ -184,7 +186,7 @@ pnpm build:zcode --help
 - `releases/<version>/sha256.txt`：校验摘要。
 - `latest.json`、`install.sh`：版本索引和安装脚本。
 
-完整目录可上传到配置的下载根地址。安装脚本从该地址下载运行包，默认安装到 `~/.zcode/runtime`，并在 `~/.local/bin` 创建 `zcode` 命令。安装目录可通过 `ZCODE_DIST_HOME` 修改，命令目录可通过 `ZCODE_DIST_BIN_DIR` 修改。
+完整目录可上传到配置的下载根地址。安装脚本从该地址下载运行包，默认安装到 `~/.zcode-local/runtime`，并在 `~/.local/bin` 创建 `zcode` 命令。安装目录可通过 `ZCODE_DIST_HOME` 修改，命令目录可通过 `ZCODE_DIST_BIN_DIR` 修改。
 
 旧 Lite 用户需要改用上述构建命令、环境变量和新的安装脚本。新安装不会删除旧 Lite 目录，也不会迁移或删除已有会话数据。
 

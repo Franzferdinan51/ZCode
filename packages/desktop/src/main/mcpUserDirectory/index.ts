@@ -37,8 +37,8 @@ interface DirectoryMcpDescriptor {
 const ZCODE_MCP_DESCRIPTOR: DirectoryMcpDescriptor = {
   source: "zcodeagentmcp",
   directorySource: "zcode",
-  userConfigDirSegments: [".zcode", "cli"],
-  workspaceConfigDirSegments: [".zcode"],
+  userConfigDirSegments: [".zcode-local", "cli"],
+  workspaceConfigDirSegments: [".zcode-local"],
   fileName: "config.json",
   format: "json",
   configKeyName: "mcp.servers",

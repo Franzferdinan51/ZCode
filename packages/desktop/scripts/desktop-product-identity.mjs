@@ -4,6 +4,7 @@
  * 可与正式版并排安装的 `ZCode Preview`。
  */
 export const ZCODE_PREVIEW_IDENTITY_ENV = "ZCODE_PREVIEW_IDENTITY";
+export const ZCODE_OFFICIAL_IDENTITY_ENV = "ZCODE_OFFICIAL_IDENTITY";
 
 const PRODUCTION_IDENTITY = Object.freeze({
   flavor: "production",
@@ -23,9 +24,20 @@ const PREVIEW_IDENTITY = Object.freeze({
   cuaHelperInstallVariant: "preview",
 });
 
+// Fork-local 身份：与官方 ZCode / Preview 并排安装，不抢单实例锁、Dock/开始菜单项与更新通道。
+const LOCAL_IDENTITY = Object.freeze({
+  flavor: "local",
+  appId: "dev.zcode.app.local",
+  productName: "ZCode Local",
+  linuxExecutableName: "zcode-local",
+  linuxPackageName: "zcode-local",
+  cuaHelperInstallVariant: "local",
+});
+
 export const desktopProductIdentities = Object.freeze({
   production: PRODUCTION_IDENTITY,
   preview: PREVIEW_IDENTITY,
+  local: LOCAL_IDENTITY,
 });
 
 function normalizeDesktopZCodeEnv(env) {
@@ -55,8 +67,27 @@ export function isPreviewIdentityRequested(env = process.env) {
  * - `ZCODE_ENV=test` 一律是 Preview，测试后端不能顶着正式 `ZCode` 身份覆盖用户的正式安装；
  * - `ZCODE_ENV=production` 默认是正式身份，显式 `ZCODE_PREVIEW_IDENTITY=1` 时改用 Preview 身份。
  * 未知 `ZCODE_ENV` 继续按 test 处理，和共享层 normalizeZCodeEnv 的 fail-safe 默认值一致。
+ *
+ * 本 fork 默认改用 `local` 身份（ZCode Local），避免任何构建意外顶掉用户的官方安装；
+ * 只有显式 `ZCODE_OFFICIAL_IDENTITY=1` 时才走上面的官方身份判定。
  */
+export function isOfficialIdentityRequested(env = process.env) {
+  const value = env[ZCODE_OFFICIAL_IDENTITY_ENV]?.trim() ?? "";
+  if (value === "1") {
+    return true;
+  }
+  if (value === "" || value === "0") {
+    return false;
+  }
+  throw new Error(
+    `invalid ${ZCODE_OFFICIAL_IDENTITY_ENV}=${env[ZCODE_OFFICIAL_IDENTITY_ENV]}; expected 1 or 0`,
+  );
+}
+
 export function resolveDesktopProductFlavor(env = process.env) {
+  if (!isOfficialIdentityRequested(env)) {
+    return "local";
+  }
   if (isPreviewIdentityRequested(env)) {
     return "preview";
   }
@@ -86,7 +117,13 @@ export function resolveWindowsAppUserModelIdForFlavor(flavor, runtime = { isPack
   if (runtime.isPackaged === false) {
     return "cn.aminer.zcode";
   }
-  return desktopProductIdentities[flavor === "preview" ? "preview" : "production"].appId;
+  if (flavor === "preview") {
+    return desktopProductIdentities.preview.appId;
+  }
+  if (flavor === "local") {
+    return desktopProductIdentities.local.appId;
+  }
+  return desktopProductIdentities.production.appId;
 }
 
 export function resolveWindowsAppUserModelId(env = process.env, runtime = { isPackaged: true }) {

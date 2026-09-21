@@ -4,7 +4,7 @@
   "private": true,
   "description": "Main CLI application for zcode",
   "bin": {
-    "zcode": "./dist/zcode.cjs"
+    "zcode-local": "./dist/zcode.cjs"
   },
   "files": [
     "dist"

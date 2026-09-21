@@ -1,5 +1,8 @@
-const DEEP_LINK_SCHEME = "zcode";
-const DEEP_LINK_RE = /\bzcode:(?:\/\/|\/)?[^\s"'<>]+/i;
+import { ZCODE_PRODUCT_FLAVOR } from "@zcode/shared";
+
+// Local fork 使用独立 scheme，避免与官方 ZCode 抢默认协议处理器（OAuth 回调会进错应用）。
+export const DEEP_LINK_SCHEME = ZCODE_PRODUCT_FLAVOR === "local" ? "zcode-local" : "zcode";
+const DEEP_LINK_RE = new RegExp(`\\b${DEEP_LINK_SCHEME}:(?:\\/\\/|\\/)?[^\\s"'<>]+`, "i");
 const OAUTH_CALLBACK_HOSTS = new Set(["oauth"]);
 const PAYMENT_CALLBACK_HOST = "payment";
 const WORKSPACE_OPEN_HOST = "workspace";

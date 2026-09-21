@@ -10,6 +10,7 @@ import {
   PlatformChannels,
 } from "@zcode/shared";
 import {
+  DEEP_LINK_SCHEME,
   extractWorkspaceOpenPath,
   extractShareImportCode,
   isOAuthCallbackUrl,
@@ -402,7 +403,7 @@ export function registerDeepLinkProtocol(
   },
   options: { iconPath?: string } = {},
 ) {
-  const scheme = "zcode";
+  const scheme = DEEP_LINK_SCHEME;
 
   if (process.defaultApp && process.argv.length >= 2) {
     const entry = resolve(process.argv[1]!);

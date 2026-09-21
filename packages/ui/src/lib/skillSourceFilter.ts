@@ -4,10 +4,10 @@ type SkillSourceType = "glm" | "unknown";
 
 function resolveSkillSourceType(skillPath: string): SkillSourceType {
   const normalized = skillPath.replaceAll("\\", "/").toLowerCase();
-  if (normalized.includes("/.zcode/skills/")) {
+  if (normalized.includes("/.zcode-local/skills/")) {
     return "glm";
   }
-  if (normalized.includes("/.zcode/cli/plugins/cache/")) {
+  if (normalized.includes("/.zcode-local/cli/plugins/cache/")) {
     return "glm";
   }
   return "unknown";

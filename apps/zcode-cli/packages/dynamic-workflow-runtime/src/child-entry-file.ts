@@ -3,7 +3,7 @@
  *
  * 为什么有这个文件：Windows 的命令行上限是 32,767 字符，payload 不能再过 argv。harness 把
  * {@link import("./child-source.js").renderChildEntry} 渲染出的 ESM 写到
- * `<cwd>/.zcode/workflow-runs/<runId>.mjs`，spawn 时命令行只剩这条路径。
+ * `<cwd>/.zcode-local/workflow-runs/<runId>.mjs`，spawn 时命令行只剩这条路径。
  *
  * 裁决：
  *   - 位置 `.zcode/workflow-runs/`，与项目级 saved workflow 的 `.zcode/workflows/` 同级不混放；
@@ -21,7 +21,7 @@ import { join } from "node:path";
 /** harness 向调用方报告的非致命状况；bootstrap 落成 warn 日志。 */
 export interface HarnessWarning {
   kind: "entry_file_fallback";
-  /** 本想写入的项目目录（`<cwd>/.zcode/workflow-runs`）。 */
+  /** 本想写入的项目目录（`<cwd>/.zcode-local/workflow-runs`）。 */
   projectDir: string;
   /** 实际回落到的目录。 */
   fallbackDir: string;
@@ -44,7 +44,7 @@ export interface ChildEntryFile {
 
 /** 项目内的入口文件目录。 */
 export function workflowRunsDir(cwd: string): string {
-  return join(cwd, ".zcode", "workflow-runs");
+  return join(cwd, ".zcode-local", "workflow-runs");
 }
 
 /** 回落目录（OS 临时目录下，跨项目共用）。 */

@@ -40,7 +40,7 @@ export const targetParts = (target) => {
   return {
     arch,
     // Keep Windows release artifacts compatible with downstream release downloaders,
-    // which request zcode-windows-<arch>.exe while internal target keys stay win/win32.
+    // which request zcode-local-windows-<arch>.exe while internal target keys stay win/win32.
     outputPlatform: releasePlatform === "win" ? "windows" : releasePlatform,
     releasePlatform,
   };
@@ -49,7 +49,8 @@ export const targetParts = (target) => {
 export const outputBinaryName = (target) => {
   const { arch, outputPlatform, releasePlatform } = targetParts(target);
   const extension = releasePlatform === "win" ? ".exe" : "";
-  return `zcode-${outputPlatform}-${arch}${extension}`;
+  // Fork-local binary name: installable alongside the official `zcode` SEA binary.
+  return `zcode-local-${outputPlatform}-${arch}${extension}`;
 };
 
 export const nodeReleaseArtifact = (target, nodeVersion) => {

@@ -6,7 +6,7 @@
 // 只是一道门——`CreateWorkflow` / `AmendWorkflow` / 中枢直接启动一收到不来自文件的脚本，就在
 // 这里写一个。
 //
-// 落点 `<cwd>/.zcode/workflow-drafts/`，与 `.zcode/workflows/`（用户保存的定义）、
+// 落点 `<cwd>/.zcode-local/workflow-drafts/`，与 `.zcode/workflows/`（用户保存的定义）、
 // `.zcode/workflow-runs/`（每个 run 的编译入口）平级。目录自带一份 `.gitignore: *`，写法与
 // dynamic-workflow-runtime/src/child-entry-file.ts 逐字同构（那里的注释记着裁决）：只在缺席时
 // 写一次，用户改过就不再动它，项目自己的 `.gitignore` 一个字都不碰。

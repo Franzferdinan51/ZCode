@@ -649,9 +649,9 @@ export default {
   protocols: [
     {
       // 协议处理器的展示名之前使用小写 scheme，打包产物里的协议描述无法体现产品名。
-      // 展示名跟随安装包身份；scheme 仍保持 zcode，因此两个应用中最后注册者会成为默认 handler。
+      // 展示名跟随安装包身份；local 身份使用独立 zcode-local scheme，避免与官方安装抢默认 handler。
       name: desktopProductIdentity.productName,
-      schemes: ["zcode"],
+      schemes: [desktopProductIdentity.flavor === "local" ? "zcode-local" : "zcode"],
     },
   ],
   mac: {

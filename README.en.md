@@ -15,11 +15,13 @@ ZCode is an AI coding workspace with desktop, browser, and terminal interfaces. 
 
 **Local-first:** the default inference path is a local [LM Studio](https://lmstudio.ai) OpenAI-compatible server at `http://127.0.0.1:1234/v1`. Load a chat model in LM Studio yourself, then send prompts — no Z.ai / BigModel login, API key, Coding Plan, or trial quota is required. ZCode does not start or load models. Optional cloud templates remain in settings but do not block the core path.
 
+**Side-by-side with official ZCode:** this fork ships as **ZCode Local** and never touches official installs — data lives in `~/.zcode-local` (override with `ZCODE_DATA_BASE_DIR`), the terminal is `zcode-local`, deep links use `zcode-local://`, and official auto-update is disabled. API keys for a protected LM Studio server go in `LM_STUDIO_API_KEY` (see `.env.example`).
+
 | Interface                    | Purpose                                                                                   | Development command            |
 | ---------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------ |
 | Desktop                      | Electron desktop application                                                              | `pnpm dev:desktop`             |
 | Web / ZCode CLI distribution | Terminal and browser workspace; packages the TUI, Web client, backend, and Agent together | `pnpm dev:web`                 |
-| Agent CLI                    | The `zcode` terminal interface, which also provides the Agent runtime for Desktop and Web | `pnpm --filter @zcode/cli dev` |
+| Agent CLI                    | The `zcode-local` terminal interface, which also provides the Agent runtime for Desktop and Web | `pnpm --filter @zcode/cli dev` |
 
 ## Setup
 
@@ -174,7 +176,7 @@ The version defaults to the root `package.json` version. Output is written to `d
 - `releases/<version>/sha256.txt`: checksum file.
 - `latest.json` and `install.sh`: version index and installer.
 
-Upload the entire directory to the configured download base URL. The installer downloads the runtime package from that URL, installs it to `~/.zcode/runtime` by default, and creates the `zcode` command in `~/.local/bin`. Override these directories with `ZCODE_DIST_HOME` and `ZCODE_DIST_BIN_DIR`, respectively.
+Upload the entire directory to the configured download base URL. The installer downloads the runtime package from that URL, installs it to `~/.zcode-local/runtime` by default, and creates the `zcode` command in `~/.local/bin`. Override these directories with `ZCODE_DIST_HOME` and `ZCODE_DIST_BIN_DIR`, respectively.
 
 Existing Lite users should switch to the new build command, environment variables, and installer. Installation does not remove old Lite directories or migrate/delete session data.
 
