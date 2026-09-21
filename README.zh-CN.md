@@ -1,7 +1,7 @@
 # ZCode
 
 <div align="center">
-  <img src="public/logo/icons/1024x1024.png" alt="ZCode" width="128" height="128" />
+  <img src="public/logo/icons-local/1024x1024.png" alt="ZCode Local" width="128" height="128" />
 </div>
 <p align="center">
   <a href="https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=47ag983c-8fcb-4d6d-814b-5395193a712c&amp;qr_code=true">飞书社群</a> ·
@@ -15,7 +15,7 @@ ZCode 是 AI 编程工作台，提供桌面应用、浏览器界面和终端 Age
 
 **本地优先：** 默认推理走本机 [LM Studio](https://lmstudio.ai) 的 OpenAI 兼容接口 `http://127.0.0.1:1234/v1`。在 LM Studio 中自行加载对话模型后即可发消息，不需要 Z.ai / BigModel 登录、API Key、Coding Plan 或试用额度。ZCode 不会代为启动或加载模型。可选云模板仍可在设置里配置，但不再挡住核心路径。
 
-**与官方 ZCode 并排共存：** 本 fork 以 **ZCode Local** 身份发布，不会触碰官方安装——数据目录为 `~/.zcode-local`（可用 `ZCODE_DATA_BASE_DIR` 覆盖），终端命令为 `zcode-local`，deep link 使用 `zcode-local://`，且已禁用官方自动更新。若 LM Studio 服务端开启了鉴权，把 Bearer Token 放到 `LM_STUDIO_API_KEY`（见 `.env.example`）。
+**与官方 ZCode 并排共存：** 本 fork 以 **ZCode Local** 身份发布，不会触碰官方安装——数据目录为 `~/.zcode-local`（可用 `ZCODE_DATA_BASE_DIR` 覆盖），终端命令为 `zcode-local`，deep link 使用 `zcode-local://`，应用图标为浅色底深色 Z（官方为深色底白色 Z），且已禁用官方自动更新。若 LM Studio 服务端开启了鉴权，把 Bearer Token 放到 `LM_STUDIO_API_KEY`（见 `.env.example`）。
 
 | 入口                 | 用途                                                              | 开发命令                       |
 | -------------------- | ----------------------------------------------------------------- | ------------------------------ |

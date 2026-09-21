@@ -18,6 +18,8 @@ import { cleanupPackagedSourcemaps } from "./scripts/packaged-sourcemap-cleanup.
 import { getTargetPlatform } from "./scripts/target-platform.mjs";
 import {
   resolveDesktopArtifactSuffix,
+  resolveDesktopIconBaseName,
+  resolveDesktopIconsDirName,
   resolveDesktopProductIdentity,
 } from "./scripts/desktop-product-identity.mjs";
 import { verifyStagedKoffi } from "./scripts/koffi-package-assets.mjs";
@@ -71,10 +73,14 @@ import {
 const buildMetadata = getBuildMetadata();
 const targetPlatform = getTargetPlatform();
 const builtinProviderConfig = await loadBuiltinProviderConfig();
-const desktopProductIdentity = resolveDesktopProductIdentity({
+const desktopIdentityEnv = {
   ...process.env,
   ZCODE_ENV: builtinProviderConfig.environment,
-});
+};
+const desktopProductIdentity = resolveDesktopProductIdentity(desktopIdentityEnv);
+// 图标基础名与多尺寸目录跟随同一套身份判定：local 用反色图标，官方身份用原图标。
+const desktopIconBase = resolveDesktopIconBaseName(desktopIdentityEnv);
+const desktopIconsDir = resolveDesktopIconsDirName(desktopIdentityEnv);
 const nativeSearchReleasePlan = resolveNativeSearchReleasePlan({
   platform: targetPlatform.os,
   arch: targetPlatform.arch,
@@ -477,6 +483,9 @@ export default {
     mirror: resolveElectronDownloadMirror(),
   },
   productName: desktopProductIdentity.productName,
+  // 应用图标（不带扩展名，各平台自动拼接 .icns/.ico/.png）：local 身份用反色图标，
+  // 官方身份显式指向原图标，与之前默认约定解析到同一文件。
+  icon: `build/${desktopIconBase}`,
   directories: {
     // macOS arm64/x64 CI 可能共享同一个 checkout 并行打包。
     // 输出根目录允许按架构隔离，避免一个 job 清理 dist 时删除另一个 job 正在签名的 .app。
@@ -592,21 +601,21 @@ export default {
     },
     {
       // 应用图标：打包后放入 resources 目录，主进程通过 process.resourcesPath 加载
-      from: "build/icon.png",
+      from: `build/${desktopIconBase}.png`,
       to: "icon.png",
     },
     ...(targetPlatform.os === "linux"
       ? [
           {
             // AppImage 用户级 hicolor 图标安装使用真实 512x512 资源，避免目录标称尺寸和 PNG IHDR 不一致。
-            from: "build/icons/512x512.png",
+            from: `build/${desktopIconsDir}/512x512.png`,
             to: "icon_512x512.png",
           },
         ]
       : []),
     {
       // Windows 独立图标：开发态和打包态都统一走同一套任务栏/窗口图标资源。
-      from: "build/icon_windows.png",
+      from: `build/${desktopIconBase}_windows.png`,
       to: "icon_windows.png",
     },
     ...(targetPlatform.os === "win32"
@@ -614,7 +623,7 @@ export default {
           {
             // Windows 托盘图标：Tray 在打包态只能稳定读取 resources 下的独立资源。
             // 这里不复用窗口 PNG，避免通知区域在高 DPI 下退化成模糊缩放图。
-            from: "build/icon.ico",
+            from: `build/${desktopIconBase}.ico`,
             to: "tray_icon.ico",
           },
         ]
@@ -735,7 +744,7 @@ export default {
     // 使用自定义安装背景图。
     background: "build/dmg_background.png",
     // 安装盘图标统一使用安装专用素材，避免复用应用图标导致安装识别度不足。
-    icon: "build/icon_installer.icns",
+    icon: `build/${desktopIconBase}_installer.icns`,
     contents: [
       // 实验性调整：为隐藏资源文件显式指定图标坐标，尽量把它们移到角落区域。
       { x: 640, y: 56, type: "file", path: ".background.tiff" },
@@ -748,9 +757,9 @@ export default {
     oneClick: false,
     allowToChangeInstallationDirectory: true,
     // Windows 安装流程使用独立安装图标，和应用运行时图标解耦。
-    installerIcon: "build/icon_installer.ico",
-    uninstallerIcon: "build/icon_installer.ico",
-    installerHeaderIcon: "build/icon_installer.ico",
+    installerIcon: `build/${desktopIconBase}_installer.ico`,
+    uninstallerIcon: `build/${desktopIconBase}_installer.ico`,
+    installerHeaderIcon: `build/${desktopIconBase}_installer.ico`,
   },
   detectUpdateChannel: false,
   publish: {

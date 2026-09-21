@@ -5,6 +5,8 @@ import {
   isOfficialIdentityRequested,
   isPreviewIdentityRequested,
   resolveDesktopArtifactSuffix,
+  resolveDesktopIconBaseName,
+  resolveDesktopIconsDirName,
   resolveDesktopProductFlavor,
   resolveDesktopProductIdentity,
   resolveWindowsAppUserModelId,
@@ -68,6 +70,27 @@ test("windows AUMID follows the local app id when packaged", () => {
   assert.equal(
     resolveWindowsAppUserModelIdForFlavor("local", { isPackaged: false }),
     "cn.aminer.zcode",
+  );
+});
+
+test("local identity uses the inverted icon set, official keeps the original", () => {
+  assert.equal(resolveDesktopIconBaseName({}), "icon-local");
+  assert.equal(resolveDesktopIconsDirName({}), "icons-local");
+  assert.equal(
+    resolveDesktopIconBaseName({ ZCODE_OFFICIAL_IDENTITY: "1", ZCODE_ENV: "production" }),
+    "icon",
+  );
+  assert.equal(
+    resolveDesktopIconsDirName({ ZCODE_OFFICIAL_IDENTITY: "1", ZCODE_ENV: "production" }),
+    "icons",
+  );
+  assert.equal(
+    resolveDesktopIconBaseName({
+      ZCODE_OFFICIAL_IDENTITY: "1",
+      ZCODE_ENV: "production",
+      ZCODE_PREVIEW_IDENTITY: "1",
+    }),
+    "icon",
   );
 });
 

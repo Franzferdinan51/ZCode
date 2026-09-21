@@ -99,6 +99,24 @@ export function resolveDesktopProductIdentity(env = process.env) {
 }
 
 /**
+ * 并排安装时只靠名字区分 Dock/任务栏图标是不够的：local 身份整套换用反色图标
+ * （`build/icon-local.*`），production/preview 继续沿用原图标。返回值是不带扩展名
+ * 的基础名，调用方按平台拼接 `.icns` / `.ico` / `.png`（`icon-local_installer`、
+ * `icon-local_windows` 同理），与 electron-builder 的图标约定保持一致。
+ */
+export function resolveDesktopIconBaseName(env = process.env) {
+  return resolveDesktopProductFlavor(env) === "local" ? "icon-local" : "icon";
+}
+
+/**
+ * 多尺寸 PNG 目录（`build/icons/512x512.png` 这类 extraResources 引用的那套），
+ * 与上面的基础名同步切换。
+ */
+export function resolveDesktopIconsDirName(env = process.env) {
+  return resolveDesktopProductFlavor(env) === "local" ? "icons-local" : "icons";
+}
+
+/**
  * 产物文件名后缀标记的是后端环境而不是身份：`_TEST` 只出现在测试后端的安装包上。
  * 生产后端的 Preview 包靠 productName（`ZCode Preview-<version>-...`）与正式包区分。
  */
