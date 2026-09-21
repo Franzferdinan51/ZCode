@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { UserInfo } from "@zcode/shared";
 import type { ModelSelectionView } from "@zcode/services";
-import { resolveProviderAvailabilityState } from "@/lib/modelProviderAvailability.js";
+import {
+  resolveProviderAvailabilityState,
+  shouldOpenProviderLoginEntry,
+} from "@/lib/modelProviderAvailability.js";
 import { logger } from "@/logger.js";
 
 interface ProviderAvailabilityLoginEntryGuardResult {
@@ -54,9 +57,12 @@ export function useProviderAvailabilityLoginEntryGuard({
         : modelSelectionView;
       const availability = resolveProviderAvailabilityState({ modelSelectionView: refreshedView });
       const { hasUsableProvider, providerCount } = availability;
-      const shouldOpenLoginEntry = !providerFamilyDomain || (!user && !hasUsableProvider);
+      const shouldOpenLoginEntry = shouldOpenProviderLoginEntry({
+        hasUsableProvider,
+        hasUser: Boolean(user),
+      });
 
-      // 未登录且没有可用模型配置时必须引导用户连接账号或填写 API Key。
+      // 未登录且没有可用本地/API 模型时才引导连接账号。LM Studio 可用时不打开 Z.ai 登录墙。
       // 启动检查、API Key 设置回流等入口统一走这里，避免各处复制判断后语义分叉。
       logger.info("[Root] provider 可用性登录入口守卫完成检查", {
         reason: options.reason,

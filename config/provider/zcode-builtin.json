@@ -1,9 +1,29 @@
 {
   "schemaVersion": 1,
-  "revision": 30,
+  "revision": 31,
   "config": {
     "providerConfigRules": {
       "templateRules": [
+        {
+          "templateId": "lm-studio",
+          "templateNameMap": {
+            "zh-CN": "LM Studio",
+            "en-US": "LM Studio"
+          },
+          "config": {
+            "access": {
+              "type": "api-key"
+            },
+            "api": {
+              "type": "openai-chat-completions",
+              "baseUrl": "http://127.0.0.1:1234/v1"
+            },
+            "logo": {
+              "type": "builtin",
+              "key": "lm-studio"
+            }
+          }
+        },
         {
           "templateId": "zai-api",
           "templateNameMap": {
@@ -689,6 +709,27 @@
         }
       ],
       "providerRules": [
+        {
+          "providerId": "local:lm-studio",
+          "templateId": "lm-studio",
+          "providerName": "LM Studio",
+          "config": {
+            "group": "local",
+            "builtinModelIds": ["local-chat"],
+            "access": {
+              "type": "api-key",
+              "apiKey": "lm-studio"
+            },
+            "api": {
+              "type": "openai-chat-completions",
+              "baseUrl": "http://127.0.0.1:1234/v1"
+            },
+            "logo": {
+              "type": "builtin",
+              "key": "lm-studio"
+            }
+          }
+        },
         {
           "providerId": "account:zai-individual-coding-plan",
           "providerName": "Z.AI Individual Coding Plan",

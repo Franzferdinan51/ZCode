@@ -2,7 +2,15 @@
 export const BUILTIN_PROVIDER_TEMPLATE_IDS = {
   zai: "zai-api",
   bigmodel: "bigmodel-api",
+  lmStudio: "lm-studio",
 } as const;
+
+/** Local-first default: LM Studio OpenAI-compatible server. */
+export const LM_STUDIO_PROVIDER_ID = "local:lm-studio";
+export const LM_STUDIO_TEMPLATE_ID = "lm-studio";
+export const DEFAULT_LM_STUDIO_BASE_URL = "http://127.0.0.1:1234/v1";
+export const DEFAULT_LM_STUDIO_API_KEY = "lm-studio";
+export const LM_STUDIO_FALLBACK_MODEL_ID = "local-chat";
 
 export const BUILTIN_MODEL_PROVIDER_IDS = {
   zaiIndividualCodingPlan: "account:zai-individual-coding-plan",

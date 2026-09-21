@@ -20,3 +20,11 @@ export function resolveProviderAvailabilityState(params: {
       providers.some((provider) => provider.models.length > 0),
   };
 }
+
+/** Local-first: a usable LM Studio / API provider unblocks chat without Z.ai login. */
+export function shouldOpenProviderLoginEntry(params: {
+  readonly hasUsableProvider: boolean;
+  readonly hasUser: boolean;
+}): boolean {
+  return !params.hasUsableProvider && !params.hasUser;
+}

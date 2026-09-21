@@ -1015,6 +1015,9 @@ importers:
         specifier: 4.6.5
         version: 4.6.5
     devDependencies:
+      '@types/node':
+        specifier: ^25.5.0
+        version: 25.6.0
       typescript:
         specifier: ^6.0.2
         version: 6.0.2

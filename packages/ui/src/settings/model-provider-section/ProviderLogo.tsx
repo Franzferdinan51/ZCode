@@ -39,6 +39,7 @@ const BUILTIN_PROVIDER_LOGO_ASSETS: Readonly<Record<string, BuiltinProviderLogoA
   "alibaba-model-studio": { light: alibabaModelStudioLogo },
   "xiaomi-mimo": { light: xiaomiMimoLogo },
   openai: { light: openAiLogo },
+  "lm-studio": { light: openAiLogo },
   anthropic: { light: anthropicLogo },
   xai: { light: xAiLogo },
   openrouter: { light: openrouterLight, dark: openrouterDark },

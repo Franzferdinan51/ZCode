@@ -3,6 +3,7 @@ import {
   type ProviderConfigLayerSnapshot,
   type ProviderConfigLayerUpdate,
 } from "@zcode/provider";
+import { LmStudioCatalogOverlaySource } from "./lm-studio-catalog-source.js";
 import { NodeZCodeBuiltinProviderConfigSource } from "./zcode-builtin-provider-config-source.js";
 import {
   EndpointScopedZCodeBuiltinSource,
@@ -84,7 +85,7 @@ export class NodeProviderConfigRuntime {
         : {}),
     });
     this.configService = new ProviderConfigService({
-      zcodeBuiltinSource: this.#zcodeBuiltinSource,
+      zcodeBuiltinSource: new LmStudioCatalogOverlaySource({ inner: this.#zcodeBuiltinSource }),
       personalRepository: this.#personalRepository,
     });
   }

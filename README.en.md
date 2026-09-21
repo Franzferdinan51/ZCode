@@ -13,6 +13,8 @@
 
 ZCode is an AI coding workspace with desktop, browser, and terminal interfaces. This repository contains the clients, backend services, shared UI, and Agent CLI and runtime source code.
 
+**Local-first:** the default inference path is a local [LM Studio](https://lmstudio.ai) OpenAI-compatible server at `http://127.0.0.1:1234/v1`. Load a chat model in LM Studio yourself, then send prompts — no Z.ai / BigModel login, API key, Coding Plan, or trial quota is required. ZCode does not start or load models. Optional cloud templates remain in settings but do not block the core path.
+
 | Interface                    | Purpose                                                                                   | Development command            |
 | ---------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------ |
 | Desktop                      | Electron desktop application                                                              | `pnpm dev:desktop`             |

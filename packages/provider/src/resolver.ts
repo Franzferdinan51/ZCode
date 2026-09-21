@@ -357,6 +357,10 @@ function resolveProviderOrder(
   effectiveProviders: ProviderConfigMap,
 ): readonly ProviderId[] {
   const sourceIds = effectiveProviders.keys();
+  const localIds = sourceIds.filter(
+    (providerId) => effectiveProviders.get(providerId)?.group === "local",
+  );
+  const localSet = new Set(localIds);
   const familyIds = sourceIds.filter((providerId) => {
     const group = effectiveProviders.get(providerId)?.group;
     return group === "zai-family" || group === "bigmodel-family";
@@ -364,12 +368,16 @@ function resolveProviderOrder(
   const familySet = new Set(familyIds);
   const builtinIds = input.zcodeBuiltinProviders
     .keys()
-    .filter((providerId) => !familySet.has(providerId));
+    .filter((providerId) => !familySet.has(providerId) && !localSet.has(providerId));
   const builtinSet = new Set(builtinIds);
   const personalIds = input.personalProviders
     .keys()
-    .filter((providerId) => !builtinSet.has(providerId) && !familySet.has(providerId));
+    .filter(
+      (providerId) =>
+        !builtinSet.has(providerId) && !familySet.has(providerId) && !localSet.has(providerId),
+    );
   return [
+    ...localIds,
     ...familyIds,
     ...resolveOwnedOrder(builtinIds, personalIds, input.personalProviderOrder ?? []),
   ];

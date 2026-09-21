@@ -4,6 +4,7 @@
     "outDir": "dist",
     "rootDir": "src",
     "lib": ["ES2025", "DOM"],
+    "types": ["node"],
     "strict": true
   },
   "include": ["src"]
