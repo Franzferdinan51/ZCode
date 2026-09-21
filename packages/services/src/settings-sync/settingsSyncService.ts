@@ -29,9 +29,11 @@ import {
   mkdir,
   readFile,
   readdir,
+  rename,
   symlink,
   writeFile,
 } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
@@ -1130,9 +1132,18 @@ function readStringArray(value: unknown): string[] {
     : [];
 }
 
+const USER_CONFIG_FILE_MODE = 0o600;
+
 async function writeJsonFile(filePath: string, value: Record<string, unknown>): Promise<void> {
+  // 与 plugin-sync 同一套写法：先落临时文件再 rename，崩溃只会留下无害的 .tmp-*，
+  // 永远不会把用户配置截成半截 JSON。
   await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
+  const tempPath = join(dirname(filePath), `.tmp-${basename(filePath)}-${randomUUID()}`);
+  await writeFile(tempPath, `${JSON.stringify(value, null, 2)}\n`, {
+    encoding: "utf-8",
+    mode: USER_CONFIG_FILE_MODE,
+  });
+  await rename(tempPath, filePath);
 }
 
 async function addPluginDirToConfig(filePath: string, pluginPath: string): Promise<void> {

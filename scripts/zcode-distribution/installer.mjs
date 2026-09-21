@@ -22,6 +22,22 @@ need_cmd tar
 LATEST_JSON="$(curl -fsSL "\${BASE_URL%/}/latest.json")"
 VERSION="$(printf '%s' "$LATEST_JSON" | node -e "let data='';process.stdin.on('data',c=>data+=c);process.stdin.on('end',()=>process.stdout.write(JSON.parse(data).version))")"
 TARBALL="$(printf '%s' "$LATEST_JSON" | node -e "let data='';process.stdin.on('data',c=>data+=c);process.stdin.on('end',()=>process.stdout.write(JSON.parse(data).tarball))")"
+SHA256="$(printf '%s' "$LATEST_JSON" | node -e "let data='';process.stdin.on('data',c=>data+=c);process.stdin.on('end',()=>process.stdout.write(JSON.parse(data).sha256 ?? ''))")"
+if [ -z "$SHA256" ]; then
+  echo "zcode-local install: release metadata has no sha256; refusing to install" >&2
+  exit 1
+fi
+
+hash_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | cut -d' ' -f1
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | cut -d' ' -f1
+  else
+    echo "zcode-local install requires sha256sum or shasum" >&2
+    exit 1
+  fi
+}
 
 TMP_DIR="$(mktemp -d)"
 cleanup() {
@@ -31,6 +47,14 @@ trap cleanup EXIT
 
 ARCHIVE="$TMP_DIR/$TARBALL"
 curl -fL "\${BASE_URL%/}/releases/$VERSION/$TARBALL" -o "$ARCHIVE"
+
+ACTUAL="$(hash_file "$ARCHIVE")"
+if [ "$ACTUAL" != "$SHA256" ]; then
+  echo "zcode-local install: checksum mismatch for $TARBALL" >&2
+  echo "  expected: $SHA256" >&2
+  echo "  actual:   $ACTUAL" >&2
+  exit 1
+fi
 
 mkdir -p "$INSTALL_DIR/releases" "$BIN_DIR"
 TARGET="$INSTALL_DIR/releases/$VERSION"
