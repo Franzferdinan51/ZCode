@@ -5,6 +5,7 @@ import {
   buildHarnessProviderGroups,
   describeRouteTarget,
   isPreferredRoute,
+  resolveHarnessRouteOption,
 } from "../src/harness-router/harnessRouterModel.js";
 
 function makeView(overrides: Partial<ModelSelectionView> = {}): ModelSelectionView {
@@ -68,4 +69,50 @@ test("isPreferredRoute matches provider and model", () => {
 test("describeRouteTarget formats selection", () => {
   assert.equal(describeRouteTarget({ providerId: "a", modelId: "b" }), "a/b");
   assert.equal(describeRouteTarget(undefined), null);
+});
+
+test("resolveHarnessRouteOption reads enabled, routed, and consent state", () => {
+  const view = makeView({
+    providers: [
+      {
+        providerId: "external:codex",
+        providerName: "Codex CLI",
+        config: {
+          access: { type: "external-harness", driverId: "codex", consentGranted: true },
+        },
+        models: [{ modelId: "external-codex", config: { enabled: true } }],
+      },
+    ],
+    preferredSelection: { providerId: "external:codex", modelId: "external-codex" },
+  });
+  assert.deepEqual(resolveHarnessRouteOption(view, "external:codex", "external-codex"), {
+    providerId: "external:codex",
+    modelId: "external-codex",
+    enabled: true,
+    isRouted: true,
+    consentGranted: true,
+  });
+  assert.equal(resolveHarnessRouteOption(view, "external:codex", "nope"), null);
+  assert.equal(resolveHarnessRouteOption(view, "external:muse", "external-muse"), null);
+  assert.equal(resolveHarnessRouteOption(null, "external:codex", "external-codex"), null);
+});
+
+test("resolveHarnessRouteOption is consent-false without granted flag", () => {
+  const view = makeView({
+    providers: [
+      {
+        providerId: "external:codex",
+        providerName: "Codex CLI",
+        config: { access: { type: "external-harness", driverId: "codex" } },
+        models: [{ modelId: "external-codex", config: { enabled: false } }],
+      },
+    ],
+  });
+  assert.deepEqual(resolveHarnessRouteOption(view, "external:codex", "external-codex"), {
+    providerId: "external:codex",
+    modelId: "external-codex",
+    enabled: false,
+    isRouted: false,
+    consentGranted: false,
+  });
 });

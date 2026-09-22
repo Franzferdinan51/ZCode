@@ -351,16 +351,28 @@ function toAiSdkProviderConfig(
   providerId: string,
   config: RegistryProviderConfig,
 ): AiSdkProviderConfig {
+  // Harness providers never reach AI SDK transport; the runner routes them
+  // to the harness executor before binding. Reject defensively so a direct
+  // bindModel caller fails loudly instead of building a broken transport.
+  if (config.access.type === "external-harness") {
+    throw new Error(
+      `Provider ${providerId} routes to an external harness and has no AI SDK transport.`,
+    );
+  }
+  const api = config.api?.toJSON();
+  if (api?.type == null || api.baseUrl == null) {
+    throw new Error(`Provider ${providerId} has no complete api endpoint.`);
+  }
   const common = {
-    ...(config.access.type !== "zhipu-account" && config.access.apiKey
+    ...("apiKey" in config.access && config.access.apiKey
       ? { apiKey: config.access.apiKey }
       : {}),
-    baseURL: config.api.baseUrl,
-    ...(config.api.headers ? { headers: { ...config.api.headers } } : {}),
-    providerOptions: { apiFormat: config.api.type },
+    baseURL: api.baseUrl,
+    ...(api.headers ? { headers: { ...api.headers } } : {}),
+    providerOptions: { apiFormat: api.type },
     access: config.access,
   };
-  switch (config.api.type) {
+  switch (api.type) {
     case "anthropic-messages":
       return { kind: "anthropic", ...common };
     case "openai-responses":
@@ -368,7 +380,7 @@ function toAiSdkProviderConfig(
     case "openai-chat-completions":
       return { kind: "openai-compatible", name: providerId, ...common };
   }
-  throw new Error(`Unsupported Provider API type: ${String(config.api.type)}`);
+  throw new Error(`Unsupported Provider API type: ${String(api.type)}`);
 }
 
 function applyModelRequestAuth(

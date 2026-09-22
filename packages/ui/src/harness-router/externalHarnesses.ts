@@ -8,7 +8,12 @@
  * API-key providers (MiniMax, Z.AI, LM Studio, ...) are covered by the
  * built-in provider templates in config/provider/zcode-builtin.json and appear
  * in the routed provider list once configured in Settings.
+ *
+ * Harnesses with a headless driver (see `@zcode/shared/harness-drivers`) are
+ * additionally routable: clicking them routes the open session to the matching
+ * `external:<driver>` provider instead of opening a terminal.
  */
+import { getHarnessDriver, type HarnessDriverId } from "@zcode/shared/harness-drivers";
 
 export interface ExternalHarness {
   /** Stable catalog id. */
@@ -139,6 +144,20 @@ export const EXTERNAL_HARNESSES: readonly ExternalHarness[] = [
     launchCommand: "mmx",
     hint: "MiniMax platform CLI (npm mmx-cli)",
   },
+  {
+    id: "mcode",
+    name: "MiniMax Code",
+    binary: "mcode",
+    launchCommand: "mcode",
+    hint: "MiniMax coding agent CLI",
+  },
+  {
+    id: "hermes",
+    name: "Hermes",
+    binary: "hermes",
+    launchCommand: "hermes",
+    hint: "Nous Research self-improving agent",
+  },
 ];
 
 /** Binaries to probe, deduplicated, in catalog order. */
@@ -155,6 +174,29 @@ export function externalHarnessBinaries(
     binaries.push(harness.binary);
   }
   return binaries;
+}
+
+/** Registry target for a routable harness. Mirrors the built-in provider rules. */
+export interface HarnessRouteTarget {
+  driverId: HarnessDriverId;
+  providerId: string;
+  modelId: string;
+}
+
+/**
+ * Route target for a catalog harness, or null when the harness has no
+ * headless driver (launch-in-terminal only). Built-in entry never routes.
+ */
+export function harnessRouteTarget(harnessId: string): HarnessRouteTarget | null {
+  const driver = getHarnessDriver(harnessId);
+  if (!driver) {
+    return null;
+  }
+  return {
+    driverId: driver.id,
+    providerId: `external:${driver.id}`,
+    modelId: `external-${driver.id}`,
+  };
 }
 
 export type ExternalHarnessStatus = "builtin" | "installed" | "missing" | "unknown";

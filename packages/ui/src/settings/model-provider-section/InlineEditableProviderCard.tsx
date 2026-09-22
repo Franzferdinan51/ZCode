@@ -748,6 +748,7 @@ export function InlineEditableProviderCard({
   const headerProviderName = providerDisplayName;
   const isAccountProvider = provider.config.access?.type === "zhipu-account";
   const isApiKeyProvider = isApiKeyAccess(provider.config.access);
+  const isHarnessProvider = provider.config.access?.type === "external-harness";
   const effectiveHeaderVisible = headerVisible && statusSection === undefined;
 
   return (
@@ -809,7 +810,7 @@ export function InlineEditableProviderCard({
       {statusSection}
 
       <div className="space-y-3">
-        {isAccountProvider ? null : (
+        {isAccountProvider || isHarnessProvider ? null : (
           <ProviderConnectionSection
             provider={provider}
             readOnly={readOnlyEndpoints}

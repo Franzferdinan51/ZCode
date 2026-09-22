@@ -14,6 +14,7 @@ interface CreateModelAdapterBaseOptions {
   modelIoFullRetentionEnabled?: boolean;
   streamIdleTimeoutMs?: number;
   statusSink?: ModelStatusSink;
+  workingDirectory?: string;
 }
 
 export type CreateModelAdapterOptions = CreateModelAdapterBaseOptions & {
@@ -32,5 +33,6 @@ export function createModelAdapter(options: CreateModelAdapterOptions): AiSdkMod
     modelIoFullRetentionEnabled: options.modelIoFullRetentionEnabled,
     streamIdleTimeoutMs: options.streamIdleTimeoutMs,
     statusSink: options.statusSink,
+    workingDirectory: options.workingDirectory,
   });
 }

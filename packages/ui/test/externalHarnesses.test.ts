@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   EXTERNAL_HARNESSES,
   externalHarnessBinaries,
+  harnessRouteTarget,
   resolveExternalHarnessStatus,
 } from "../src/harness-router/externalHarnesses.js";
 
@@ -60,7 +61,32 @@ test("externalHarnessBinaries deduplicates in order", () => {
     "goose",
     "cline",
     "mmx",
+    "mcode",
+    "hermes",
   ]);
+});
+
+test("harnessRouteTarget maps driver harnesses to registry targets", () => {
+  assert.deepEqual(harnessRouteTarget("codex"), {
+    driverId: "codex",
+    providerId: "external:codex",
+    modelId: "external-codex",
+  });
+  assert.deepEqual(harnessRouteTarget("muse")?.providerId, "external:muse");
+  assert.deepEqual(harnessRouteTarget("grok-local"), {
+    driverId: "grok-local",
+    providerId: "external:grok-local",
+    modelId: "external-grok-local",
+  });
+  assert.deepEqual(harnessRouteTarget("mcode")?.modelId, "external-mcode");
+  assert.deepEqual(harnessRouteTarget("hermes"), {
+    driverId: "hermes",
+    providerId: "external:hermes",
+    modelId: "external-hermes",
+  });
+  assert.equal(harnessRouteTarget("zcode"), null);
+  assert.equal(harnessRouteTarget("pi"), null);
+  assert.equal(harnessRouteTarget("nope"), null);
 });
 
 test("resolveExternalHarnessStatus honors builtin and detection availability", () => {

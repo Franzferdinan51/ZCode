@@ -202,6 +202,8 @@ export interface ModelSelectionView extends Partial<EffectiveModelSelectionResul
   readonly revision: number;
   readonly providers: readonly ModelSelectionProviderView[];
   readonly preferredSelection?: ModelSelection;
+  /** How preferredSelection was chosen; absent when there is no preference. */
+  readonly preferredSource?: "configured-default" | "registry-fallback";
 }
 
 export class ProviderSettingsFacade {
@@ -549,7 +551,9 @@ export class ModelSelectionFacade {
           .filter((provider) => provider.config.visibility !== "hidden")
           .map(projectModelSelectionProviderView),
       ),
-      ...(initial.source === "none" ? {} : { preferredSelection: initial.selection }),
+      ...(initial.source === "none"
+        ? {}
+        : { preferredSelection: initial.selection, preferredSource: initial.source }),
       ...(input
         ? resolveEffectiveModelSelection({
             selection: input.selection,

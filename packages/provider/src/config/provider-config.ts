@@ -3,6 +3,7 @@ import { ConfigOverlay, type ConfigValidationIssue } from "../config-overlay.js"
 import type { z } from "zod";
 import {
   completeApiKeyAccessDataSchema,
+  completeExternalHarnessAccessDataSchema,
   completeZhipuAccountAccessDataSchema,
   completeProviderApiDataSchema,
   completeProviderConfigDataSchema,
@@ -12,6 +13,7 @@ import {
   type providerVisibilityDataSchema,
   type providerLogoDataSchema,
   type apiKeyAccessDataSchema,
+  type externalHarnessAccessDataSchema,
   type zhipuAccountAccessDataSchema,
   type providerAccessDataSchema,
   type providerApiDataSchema,
@@ -111,7 +113,58 @@ export class ZhipuAccountAccessConfig extends ConfigOverlay<ZhipuAccountAccessCo
   }
 }
 
-export type ProviderAccessConfig = ApiKeyAccessConfig | ZhipuAccountAccessConfig;
+export type ExternalHarnessAccessConfigInput = Omit<ExternalHarnessAccessConfigObject, "type">;
+
+export type ExternalHarnessAccessConfigObject = Readonly<
+  z.infer<typeof externalHarnessAccessDataSchema>
+>;
+
+export class ExternalHarnessAccessConfig extends ConfigOverlay<ExternalHarnessAccessConfig> {
+  readonly type = "external-harness" as const;
+  readonly driverId?: ExternalHarnessAccessConfigInput["driverId"];
+  readonly consentGranted?: ExternalHarnessAccessConfigInput["consentGranted"];
+  readonly timeoutMs?: ExternalHarnessAccessConfigInput["timeoutMs"];
+  readonly binaryPath?: ExternalHarnessAccessConfigInput["binaryPath"];
+
+  constructor(input: ExternalHarnessAccessConfigInput = {}) {
+    super();
+    this.driverId = input.driverId;
+    this.consentGranted = input.consentGranted;
+    this.timeoutMs = input.timeoutMs;
+    this.binaryPath = input.binaryPath;
+    Object.freeze(this);
+  }
+
+  overlay(next: ExternalHarnessAccessConfig): ExternalHarnessAccessConfig {
+    return new ExternalHarnessAccessConfig({
+      driverId: this.overlayValue(this.driverId, next.driverId),
+      consentGranted: this.overlayValue(this.consentGranted, next.consentGranted),
+      timeoutMs: this.overlayValue(this.timeoutMs, next.timeoutMs),
+      binaryPath: this.overlayValue(this.binaryPath, next.binaryPath),
+    });
+  }
+
+  validateComplete(path: readonly string[] = []): readonly ConfigValidationIssue[] {
+    return validateConfigSchema(completeExternalHarnessAccessDataSchema, this.toJSON(), path);
+  }
+
+  toJSON(): ExternalHarnessAccessConfigObject {
+    return {
+      type: this.type,
+      ...objectWithoutUndefined({
+        driverId: this.driverId,
+        consentGranted: this.consentGranted,
+        timeoutMs: this.timeoutMs,
+        binaryPath: this.binaryPath,
+      }),
+    };
+  }
+}
+
+export type ProviderAccessConfig =
+  | ApiKeyAccessConfig
+  | ZhipuAccountAccessConfig
+  | ExternalHarnessAccessConfig;
 
 export type ProviderAccessConfigObject = Readonly<z.infer<typeof providerAccessDataSchema>>;
 
@@ -505,6 +558,8 @@ function overlayProviderAccess(
       return current.overlay(next as ApiKeyAccessConfig);
     case "zhipu-account":
       return current.overlay(next as ZhipuAccountAccessConfig);
+    case "external-harness":
+      return current.overlay(next as ExternalHarnessAccessConfig);
   }
 }
 

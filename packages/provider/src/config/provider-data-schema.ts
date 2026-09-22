@@ -53,13 +53,37 @@ export const zhipuAccountAccessDataSchema = z
     type: completeZhipuAccountAccessDataSchema.shape.type,
   })
   .strict();
+export const externalHarnessDriverIdDataSchema = z.enum([
+  "codex",
+  "claude",
+  "gemini",
+  "opencode",
+  "muse",
+  "grok-local",
+  "mcode",
+  "hermes",
+]);
+export const externalHarnessAccessDataSchema = z
+  .object({
+    type: z.literal("external-harness"),
+    driverId: externalHarnessDriverIdDataSchema.nullable().optional(),
+    consentGranted: z.boolean().nullable().optional(),
+    timeoutMs: z.number().int().positive().nullable().optional(),
+    binaryPath: z.string().min(1).nullable().optional(),
+  })
+  .strict();
+export const completeExternalHarnessAccessDataSchema = externalHarnessAccessDataSchema.extend({
+  driverId: externalHarnessDriverIdDataSchema,
+});
 export const providerAccessDataSchema = z.discriminatedUnion("type", [
   apiKeyAccessDataSchema,
   zhipuAccountAccessDataSchema,
+  externalHarnessAccessDataSchema,
 ]);
 const completeProviderAccessDataSchema = z.discriminatedUnion("type", [
   completeApiKeyAccessDataSchema,
   completeZhipuAccountAccessDataSchema,
+  completeExternalHarnessAccessDataSchema,
 ]);
 
 export const completeProviderApiDataSchema = z
@@ -93,11 +117,21 @@ export const providerConfigDataSchema = z
     visibility: providerVisibilityDataSchema.nullable().optional(),
   })
   .strict();
-export const completeProviderConfigDataSchema = providerConfigDataSchema.extend({
+const completeStandardProviderConfigDataSchema = providerConfigDataSchema.extend({
   group: providerGroupDataSchema,
   access: completeProviderAccessDataSchema,
   api: completeProviderApiDataSchema,
 });
+// Harness providers execute a local CLI instead of calling HTTP, so no api
+// endpoint is required; consent stays a runtime gate, not config completeness.
+const completeHarnessProviderConfigDataSchema = providerConfigDataSchema.extend({
+  group: providerGroupDataSchema,
+  access: completeExternalHarnessAccessDataSchema,
+});
+export const completeProviderConfigDataSchema = z.union([
+  completeStandardProviderConfigDataSchema,
+  completeHarnessProviderConfigDataSchema,
+]);
 
 export const providerTemplateNameMapDataSchema = z
   .object({

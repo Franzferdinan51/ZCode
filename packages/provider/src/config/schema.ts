@@ -4,6 +4,7 @@ import { providerConfigDataSchema, zhipuAccountAccessDataSchema } from "./provid
 import { ModelConfig, ModelConfigRules } from "./model-config.js";
 import {
   ApiKeyAccessConfig,
+  ExternalHarnessAccessConfig,
   ProviderApiConfig,
   ProviderConfig,
   ProviderConfigMap,
@@ -145,14 +146,23 @@ function createTemplateRules(
 function createProviderConfig(config: z.infer<typeof providerConfigDataSchema>): ProviderConfig {
   return new ProviderConfig({
     ...config,
-    access:
-      config.access == null
-        ? config.access
-        : config.access.type !== "zhipu-account"
-          ? new ApiKeyAccessConfig(config.access)
-          : new ZhipuAccountAccessConfig(config.access),
+    access: createProviderAccess(config.access),
     api: config.api == null ? config.api : new ProviderApiConfig(config.api),
   });
+}
+
+function createProviderAccess(
+  access: z.infer<typeof providerConfigDataSchema>["access"],
+): ProviderConfig["access"] {
+  if (access == null) return access;
+  switch (access.type) {
+    case "zhipu-account":
+      return new ZhipuAccountAccessConfig(access);
+    case "external-harness":
+      return new ExternalHarnessAccessConfig(access);
+    default:
+      return new ApiKeyAccessConfig(access);
+  }
 }
 
 function createModelConfig(config: z.infer<typeof modelConfigDataSchema>): ModelConfig {

@@ -3,6 +3,8 @@ import type { z } from "zod";
 import type { completeModelConfigDataSchema } from "@zcode/shared/model-config";
 import type {
   completeApiKeyAccessDataSchema,
+  completeExternalHarnessAccessDataSchema,
+  completeProviderApiDataSchema,
   completeZhipuAccountAccessDataSchema,
   completeProviderConfigDataSchema,
 } from "./config/provider-data-schema.js";
@@ -11,6 +13,8 @@ import {
   type ApiKeyAccessConfig,
   ModelConfig,
   ModelConfigRules,
+  type ExternalHarnessAccessConfig,
+  type ProviderApiConfig,
   type ZhipuAccountAccessConfig,
   type ModelId,
   type ProviderConfig,
@@ -25,9 +29,13 @@ import type { AccountProviderStates } from "./account-provider-state.js";
 export type RegistryZhipuAccountAccessConfig = ZhipuAccountAccessConfig &
   z.infer<typeof completeZhipuAccountAccessDataSchema>;
 
+export type RegistryExternalHarnessAccessConfig = ExternalHarnessAccessConfig &
+  z.infer<typeof completeExternalHarnessAccessDataSchema>;
+
 export type RegistryProviderAccessConfig =
   | (ApiKeyAccessConfig & z.infer<typeof completeApiKeyAccessDataSchema>)
-  | RegistryZhipuAccountAccessConfig;
+  | RegistryZhipuAccountAccessConfig
+  | RegistryExternalHarnessAccessConfig;
 
 export type RegistryProviderConfig = ProviderConfig &
   z.infer<typeof completeProviderConfigDataSchema> & {
@@ -39,34 +47,74 @@ export type RegistryProviderConfigObject = z.infer<typeof completeProviderConfig
 export function serializeRegistryProviderConfig(
   config: RegistryProviderConfig,
 ): RegistryProviderConfigObject {
-  return {
+  const access = serializeRegistryProviderAccess(config.access);
+  const shared = {
     group: config.group,
     ...(config.logo === undefined ? {} : { logo: config.logo }),
-    access:
-      config.access.type !== "zhipu-account"
-        ? {
-            type: config.access.type,
-            apiKey: config.access.apiKey,
-            ...(config.access.apiKeyManagementUrl === undefined
-              ? {}
-              : { apiKeyManagementUrl: config.access.apiKeyManagementUrl }),
-          }
-        : {
-            type: config.access.type,
-            accountType: config.access.accountType,
-            mode: config.access.mode,
-            entitled: config.access.entitled,
-          },
-    api: {
-      type: config.api.type,
-      baseUrl: config.api.baseUrl,
-      ...(config.api.headers == null ? {} : { headers: config.api.headers }),
-    },
     ...(config.builtinModelIds == null ? {} : { builtinModelIds: [...config.builtinModelIds] }),
     ...(config.personalModelIds == null ? {} : { personalModelIds: [...config.personalModelIds] }),
     ...(config.modelOrder == null ? {} : { modelOrder: [...config.modelOrder] }),
     ...(config.visibility === undefined ? {} : { visibility: config.visibility }),
   };
+  // Harness providers execute a local CLI; no api endpoint is required.
+  if (access.type === "external-harness") {
+    return {
+      ...shared,
+      access,
+      ...(config.api == null ? {} : { api: config.api.toJSON() }),
+    };
+  }
+  const api = config.api;
+  if (api == null) {
+    throw new Error("Registry standard provider config requires a complete api endpoint.");
+  }
+  return { ...shared, access, api: serializeCompleteRegistryProviderApi(api) };
+}
+
+function serializeCompleteRegistryProviderApi(
+  api: Pick<ProviderApiConfig, "toJSON">,
+): z.infer<typeof completeProviderApiDataSchema> {
+  const json = api.toJSON();
+  // Registry configs passed validateComplete, so a standard provider always
+  // carries a complete endpoint; the throw guards direct callers only.
+  if (json.type == null || json.baseUrl == null) {
+    throw new Error("Registry standard provider config requires a complete api endpoint.");
+  }
+  return {
+    type: json.type,
+    baseUrl: json.baseUrl,
+    ...(json.headers == null ? {} : { headers: { ...json.headers } }),
+  };
+}
+
+function serializeRegistryProviderAccess(
+  access: RegistryProviderAccessConfig,
+): RegistryProviderConfigObject["access"] {
+  switch (access.type) {
+    case "zhipu-account":
+      return {
+        type: access.type,
+        accountType: access.accountType,
+        mode: access.mode,
+        entitled: access.entitled,
+      };
+    case "external-harness":
+      return {
+        type: access.type,
+        driverId: access.driverId,
+        ...(access.consentGranted == null ? {} : { consentGranted: access.consentGranted }),
+        ...(access.timeoutMs == null ? {} : { timeoutMs: access.timeoutMs }),
+        ...(access.binaryPath == null ? {} : { binaryPath: access.binaryPath }),
+      };
+    default:
+      return {
+        type: access.type,
+        apiKey: access.apiKey,
+        ...(access.apiKeyManagementUrl === undefined
+          ? {}
+          : { apiKeyManagementUrl: access.apiKeyManagementUrl }),
+      };
+  }
 }
 
 export type RegistryModelConfig = ModelConfig & z.infer<typeof completeModelConfigDataSchema>;

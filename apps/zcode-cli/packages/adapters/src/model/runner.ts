@@ -10,7 +10,9 @@ import {
 import type {
   Logger,
   Model,
+  ModelId,
   ModelOptions,
+  ModelProviderId,
   ModelRequestAuth,
   ModelRequestDependencies,
   ModelRequestAuthSourceInput,
@@ -42,6 +44,9 @@ import {
   type ResolvedAiSdkModel,
 } from "./runner-runtime.js";
 import { createModel, type ModelExecutionRequest } from "./model.js";
+import { requireHarnessDriver } from "@zcode/shared/harness-drivers";
+import type { RegistryExternalHarnessAccessConfig } from "@zcode/provider";
+import { createHarnessExecutor, HarnessSessionStore } from "./harness/index.js";
 
 export type { AiSdkModelRetryOptions } from "./retry-policy.js";
 export type {
@@ -65,6 +70,8 @@ export interface AiSdkModelAdapterOptions {
   statusSink?: ModelStatusSink;
   streamIdleTimeoutMs?: number;
   modelIoFullRetentionEnabled?: boolean;
+  /** Spawn cwd for external-harness routed turns; defaults to process.cwd(). */
+  workingDirectory?: string;
 }
 
 export interface CreateAiSdkModelOptions {
@@ -87,6 +94,8 @@ export class AiSdkModelAdapter {
   private statusSink?: ModelStatusSink;
   private readonly streamIdleTimeoutMs: number;
   private modelIoFullRetentionEnabled: boolean;
+  private readonly harnessSessions = new HarnessSessionStore();
+  private readonly workingDirectory?: string;
 
   constructor(options: AiSdkModelAdapterOptions) {
     this.execution = new AiSdkModelExecution(
@@ -107,6 +116,7 @@ export class AiSdkModelAdapter {
     this.statusSink = options.statusSink;
     this.streamIdleTimeoutMs = options.streamIdleTimeoutMs ?? DEFAULT_MODEL_STREAM_IDLE_TIMEOUT_MS;
     this.modelIoFullRetentionEnabled = options.modelIoFullRetentionEnabled ?? false;
+    this.workingDirectory = options.workingDirectory;
   }
 
   setModelIoFullRetentionEnabled(enabled: boolean): void {
@@ -136,6 +146,11 @@ export class AiSdkModelAdapter {
   }
 
   createModel(options: CreateAiSdkModelOptions): Model {
+    // Harness providers bypass AI SDK binding entirely: no HTTP transport,
+    // no api endpoint. The routed turn is executed by the external CLI.
+    if (options.providerConfig.access.type === "external-harness") {
+      return this.createHarnessModel(options, options.providerConfig.access);
+    }
     const boundResolution = this.execution.bindModel({
       providerId: options.providerId,
       modelId: options.modelId,
@@ -283,6 +298,33 @@ export class AiSdkModelAdapter {
           );
         },
       },
+    });
+  }
+
+  private createHarnessModel(
+    options: CreateAiSdkModelOptions,
+    access: RegistryExternalHarnessAccessConfig,
+  ): Model {
+    const driver = requireHarnessDriver(access.driverId);
+    const executor = createHarnessExecutor({
+      driver,
+      sessions: this.harnessSessions,
+      consent: {
+        isGranted: (driverId) => driverId === access.driverId && access.consentGranted === true,
+      },
+      ...(access.binaryPath == null ? {} : { binaryPath: access.binaryPath }),
+      ...(this.workingDirectory === undefined ? {} : { workingDirectory: this.workingDirectory }),
+      ...(access.timeoutMs == null ? {} : { timeoutMs: access.timeoutMs }),
+      env: this.env,
+    });
+    return createModel({
+      providerId: options.providerId as ModelProviderId,
+      modelId: options.modelId as ModelId,
+      displayName: options.displayName,
+      properties: options.modelConfig.properties,
+      optionSpecs: options.modelConfig.optionSpecs,
+      options: options.options,
+      executor,
     });
   }
 
