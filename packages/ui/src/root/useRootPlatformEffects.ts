@@ -45,7 +45,6 @@ export function useRootPlatformEffects({
   totalUnreadTaskCount,
   hasCompletedFullTabRestore = true,
   intl,
-  isRestoringOAuthSession,
 }: {
   initialWorkspaceAbsPath?: string;
   initialWorkspaceIdentity?: string;
@@ -78,7 +77,6 @@ export function useRootPlatformEffects({
   totalUnreadTaskCount: number;
   hasCompletedFullTabRestore?: boolean;
   intl: ReturnType<typeof import("@/i18n/IntlProvider.js").useZCodeIntl>["intl"];
-  isRestoringOAuthSession: boolean;
 }) {
   const didBootstrapInitialWorkspaceRef = useRef(false);
   const baseServices = useOptionalBaseWorkspaceServices();
@@ -90,8 +88,6 @@ export function useRootPlatformEffects({
   const importToastIdRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // 启动时必须先判断 OAuth 本地会话，再恢复历史/初始 workspace。
-    // 如果这里抢先 addTab，未登录用户会先看到主界面，之后才被登录页覆盖。
     if (!canBootstrapInitialWorkspace || didBootstrapInitialWorkspaceRef.current) {
       return;
     }
@@ -288,12 +284,6 @@ export function useRootPlatformEffects({
     if (!pending || !baseServices || activeShareImportRef.current || importOperationRef.current) {
       return;
     }
-    if (isRestoringOAuthSession) {
-      return;
-    }
-
-    // 分享页 Deep Link 不应在 Root 层按登录态分叉；未登录与已登录都
-    // 走同一份 continuation/import 流程。公开可导入分享由接口自身决定是否可用。
     pending.status = "importing";
     pendingShareImportRef.current = null;
     activeShareImportRef.current = pending;
@@ -485,7 +475,6 @@ export function useRootPlatformEffects({
     addTab,
     baseServices,
     intl,
-    isRestoringOAuthSession,
     locale,
     shareImportRevision,
   ]);

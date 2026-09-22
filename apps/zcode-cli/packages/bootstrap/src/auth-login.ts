@@ -1,21 +1,9 @@
 import {
-  createCodingPlanApiKeyResolver,
   createSharedZCodeCredentialStore,
-  createCliOAuthClient,
-  createCliOAuthPollToken,
-  openUrlInBrowser,
   SHARED_ZCODE_CREDENTIAL_KEYS,
-  type BrowserOpenResult,
   type SharedZCodeCredentialStore,
-  type CliOAuthClient,
-  type CliOAuthInitData,
-  type CliOAuthPollData,
-  type CliOAuthUser,
 } from "@zcode/adapters";
-import { createConfig } from "@zcode/adapters/config";
-import { createNodeHttpClientAdapter } from "@zcode/adapters/http";
 import type { EnvRecord } from "@zcode/adapters/model";
-import { buildZCodeEndpointUrls, resolveRuntimeZCodeEndpointOrigin } from "@zcode/shared";
 import {
   NodeModelSelectionConfigRepository,
   NodePersonalProviderConfigRepository,
@@ -32,45 +20,8 @@ import {
   standaloneAccountIdentityCredentialKey,
   standaloneAccountProviderCredentialKey,
 } from "./app/standalone-account-provider-runtime.js";
-import { throwIfAborted, waitWithAbort } from "./auth-login-abort.js";
-import { setTimeout as delay } from "node:timers/promises";
-import { pollUntilReady } from "./auth-login-polling.js";
-
-const DEFAULT_LOGIN_TIMEOUT_MS = 5 * 60 * 1_000;
 
 export type CodingPlanProviderId = "bigmodel" | "zai";
-
-export interface LoginZCodeCliOptions {
-  providerId?: CodingPlanProviderId;
-  abortSignal?: AbortSignal;
-  apiKeyResolver?: ReturnType<typeof createCodingPlanApiKeyResolver>;
-  baseUrl?: string;
-  credentialStore?: SharedZCodeCredentialStore;
-  env?: EnvRecord;
-  httpClient?: Parameters<typeof createCliOAuthClient>[0]["httpClient"];
-  noBrowser?: boolean;
-  now?: () => number;
-  onAuthorizeUrl?: (data: CliOAuthInitData) => void | Promise<void>;
-  onBrowserOpen?: (result: BrowserOpenResult) => void | Promise<void>;
-  onPollStatus?: (data: CliOAuthPollData) => void | Promise<void>;
-  openBrowser?: (url: string) => Promise<BrowserOpenResult>;
-  pollToken?: string;
-  sleep?: (ms: number) => Promise<void>;
-  timeoutMs?: number;
-  personalProviderConfigPath?: string;
-}
-
-export interface LoginZCodeCliResult {
-  browser?: BrowserOpenResult;
-  configPath: string;
-  credentialsPath: string;
-  model: string;
-  providerId: CodingPlanProviderId;
-  user: CliOAuthUser;
-}
-
-export type LoginBigmodelCodingPlanOptions = Omit<LoginZCodeCliOptions, "providerId">;
-export type LoginBigmodelCodingPlanResult = LoginZCodeCliResult & { providerId: "bigmodel" };
 
 export interface ConfigureCodingPlanApiKeyOptions {
   apiKey: string;
@@ -122,137 +73,6 @@ export class ZCodeCliLoginError extends Error {
     this.name = "ZCodeCliLoginError";
     this.code = code;
   }
-}
-
-export async function loginZCodeCli(
-  options: LoginZCodeCliOptions = {},
-): Promise<LoginZCodeCliResult> {
-  const env = options.env ?? process.env;
-  const providerId = options.providerId ?? "zai";
-  const now = options.now ?? Date.now;
-  const timeoutMs = options.timeoutMs ?? DEFAULT_LOGIN_TIMEOUT_MS;
-  const deadlineMs = now() + timeoutMs;
-  const timeoutController = new AbortController();
-  const signal = options.abortSignal
-    ? AbortSignal.any([options.abortSignal, timeoutController.signal])
-    : timeoutController.signal;
-  const timeoutError = () =>
-    new ZCodeCliLoginError("auth_timeout", "Authorization timed out. Please retry login.");
-  let timer = setTimeout(() => timeoutController.abort(timeoutError()), timeoutMs);
-  try {
-    throwIfAborted(signal);
-    const pollToken = options.pollToken ?? createCliOAuthPollToken();
-    const credentialStore = options.credentialStore ?? createSharedZCodeCredentialStore({ env });
-    const oauthClient = createOAuthClient(options, env);
-    const initData = await waitWithAbort(oauthClient.init({ pollToken }, { signal }), signal);
-    const remainingMs = Math.min(deadlineMs, initData.expires_at * 1_000) - now();
-    if (remainingMs <= 0) throw timeoutError();
-    clearTimeout(timer);
-    timer = setTimeout(() => timeoutController.abort(timeoutError()), remainingMs);
-    await options.onAuthorizeUrl?.(initData);
-    throwIfAborted(signal);
-    const browser = options.noBrowser
-      ? undefined
-      : await waitWithAbort(
-          (options.openBrowser ?? openUrlInBrowser)(initData.authorize_url),
-          signal,
-        );
-    if (browser) await options.onBrowserOpen?.(browser);
-    const readyData = await pollUntilReady({
-      abortSignal: signal,
-      initData,
-      now,
-      oauthClient,
-      onPollStatus: options.onPollStatus,
-      pollToken,
-      sleep: options.sleep ?? ((ms) => delay(ms, undefined, { signal })),
-      timeoutMs: Math.max(0, deadlineMs - now()),
-      createError: (code) =>
-        code === "auth_timeout"
-          ? timeoutError()
-          : new ZCodeCliLoginError(code, "Authorization failed. Please retry login."),
-    });
-    const apiKey = await waitWithAbort(
-      resolveCodingPlanApiKey({
-        accessToken: readyData.accessToken,
-        env,
-        httpClient: options.httpClient,
-        family: providerId,
-        resolver: options.apiKeyResolver,
-        signal,
-      }),
-      signal,
-    );
-    // A cancelled/expired attempt must not persist a late ready response or API key.
-    throwIfAborted(signal);
-    try {
-      if (providerId === "zai") {
-        await credentialStore.saveZaiLoginCredentials({
-          accessToken: readyData.accessToken,
-          jwtToken: readyData.token,
-          user: readyData.user,
-        });
-      } else {
-        await credentialStore.saveMany({
-          [SHARED_ZCODE_CREDENTIAL_KEYS.activeProvider]: providerId,
-          [SHARED_ZCODE_CREDENTIAL_KEYS.zcodeJwtToken]: readyData.token,
-          [SHARED_ZCODE_CREDENTIAL_KEYS.bigmodelAccessToken]: readyData.accessToken,
-          ...(readyData.refreshToken
-            ? { [SHARED_ZCODE_CREDENTIAL_KEYS.bigmodelRefreshToken]: readyData.refreshToken }
-            : {}),
-          [SHARED_ZCODE_CREDENTIAL_KEYS.bigmodelUserInfo]: JSON.stringify({
-            id: readyData.user.user_id,
-            username: readyData.user.name || readyData.user.email || readyData.user.user_id,
-            displayName: readyData.user.name || readyData.user.email || readyData.user.user_id,
-            rawProfile: readyData.user,
-          }),
-        });
-      }
-    } catch (error) {
-      throw new ZCodeCliLoginError(
-        "credential_write_failed",
-        "Login succeeded but writing credentials failed.",
-        { cause: error },
-      );
-    }
-    throwIfAborted(signal);
-    let configPatch: StandaloneCodingPlanPersistenceResult;
-    try {
-      configPatch = await persistStandaloneCodingPlanConnection({
-        accountIdentity: readyData.user.user_id,
-        apiKey,
-        credentialStore,
-        env,
-        personalProviderConfigPath: options.personalProviderConfigPath,
-        providerId,
-      });
-    } catch (error) {
-      throw new ZCodeCliLoginError(
-        "config_update_failed",
-        "Login succeeded but updating ZCode config failed.",
-        { cause: error },
-      );
-    }
-    return {
-      ...(browser ? { browser } : {}),
-      configPath: configPatch.path,
-      credentialsPath: credentialStore.filePath,
-      model: configPatch.mainModel,
-      providerId,
-      user: readyData.user,
-    };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-export async function loginBigmodelCodingPlan(
-  options: LoginBigmodelCodingPlanOptions = {},
-): Promise<LoginBigmodelCodingPlanResult> {
-  return {
-    ...(await loginZCodeCli({ ...options, providerId: "bigmodel" })),
-    providerId: "bigmodel",
-  };
 }
 
 export async function configureCodingPlanApiKey(
@@ -361,50 +181,4 @@ async function persistStandaloneCodingPlanConnection(input: {
     mainModel: `${providerId}/${modelId}`,
     path,
   };
-}
-
-function createOAuthClient(options: LoginZCodeCliOptions, env: EnvRecord): CliOAuthClient {
-  return createCliOAuthClient({
-    baseUrl:
-      options.baseUrl ?? buildZCodeEndpointUrls(resolveCliZCodeEndpointOrigin(env)).apiBaseUrl,
-    providerId: options.providerId ?? "zai",
-    httpClient: options.httpClient ?? createDefaultHttpClient(env),
-  });
-}
-
-function resolveCliZCodeEndpointOrigin(env: EnvRecord): string {
-  return resolveRuntimeZCodeEndpointOrigin(env);
-}
-
-function createDefaultHttpClient(env: EnvRecord) {
-  const config = createConfig({ env });
-  return createNodeHttpClientAdapter({
-    env,
-    proxyUrl: config.config.network.httpProxy,
-    noProxy: config.config.network.noProxy,
-    caCertFile: config.config.network.caCertFile,
-    timeoutMs: config.config.network.timeout,
-  });
-}
-
-async function resolveCodingPlanApiKey(input: {
-  accessToken: string;
-  env: EnvRecord;
-  httpClient?: Parameters<typeof createCodingPlanApiKeyResolver>[0]["httpClient"];
-  family: CodingPlanProviderId;
-  resolver?: ReturnType<typeof createCodingPlanApiKeyResolver>;
-  signal?: AbortSignal;
-}): Promise<string> {
-  const resolver =
-    input.resolver ??
-    createCodingPlanApiKeyResolver({
-      httpClient: input.httpClient ?? createDefaultHttpClient(input.env),
-    });
-  return resolver.resolve(
-    {
-      accessToken: input.accessToken,
-      family: input.family,
-    },
-    { signal: input.signal },
-  );
 }

@@ -27,21 +27,16 @@ import { useModelProviders } from "@/hooks/useModelProviders.js";
 import { resolveEntitledAccountProviderAccess } from "@/lib/accountProviderAccess.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
 import { useServices } from "@/hooks/useServices.js";
-import { useZCodeStore } from "@/store/StoreProvider.js";
 import { logger } from "@/logger.js";
 import {
   PRESET_PROVIDER_SPECS,
   PRESET_SUBSCRIPTION_TIMEOUT_MS,
-  BIGMODEL_REGISTRATION_URL,
-  type CodingPlanStatus,
   type ModelProviderNavGroup,
 } from "./model-provider-section/constants.js";
 import { ModelProviderSectionDetail } from "./model-provider-section/Detail.js";
 import { ModelProviderSectionLayout } from "./model-provider-section/SectionLayout.js";
 import { ProviderTemplatePicker } from "./model-provider-section/ProviderTemplatePicker.js";
-import type { CodingPlanLoginOptions } from "./model-provider-section/codingPlanPricingCards.js";
 import { useModelProviderNavigation } from "./model-provider-section/useModelProviderNavigation.js";
-import { reportPresetSubscriptionSuccess } from "./model-provider-section/oauthActions.js";
 import {
   createCodingPlanProviderNodeKey,
   createCustomProviderNodeKey,
@@ -383,10 +378,6 @@ export function ModelProviderSection({
   const codingPlanStatusSyncAttemptsRef = useRef(
     new Map<string, "inFlight" | "succeeded" | "failed">(),
   );
-  const requestLoginEntry = useZCodeStore((state) => state.requestLoginEntry);
-  const setUser = useZCodeStore((state) => state.setUser);
-  const oauthError = useZCodeStore((state) => state.oauthError);
-  const setOAuthError = useZCodeStore((state) => state.setOAuthError);
   const {
     settings: sharedSettings,
     loading: sharedSettingsLoading,
@@ -514,15 +505,9 @@ export function ModelProviderSection({
           normalizedActiveProvider === BIGMODEL_PROVIDER_ID &&
           (bigmodelToken?.trim().length ?? 0) > 0,
       });
-      if (!normalizedActiveProvider && options.clearUserWhenLoggedOut) {
-        // provider Unlink 已等价于 App logout。
-        // 服务端 token 已清理后，设置页也要同步清掉 Zustand user，否则侧边栏会一直显示旧登录态直到重启。
-        setUser(null);
-        setOAuthError(null);
-      }
       return normalizedActiveProvider;
     },
-    [credentialService, setOAuthError, setUser],
+    [credentialService],
   );
 
   const refreshProviderPanelAfterAuthChange = useCallback(
@@ -631,10 +616,6 @@ export function ModelProviderSection({
 
       presetSubscriptionCompletionProviderIdRef.current = presetSubscriptionProviderId;
       void (async () => {
-        void reportPresetSubscriptionSuccess({
-          platform,
-          presetId: presetSubscriptionProviderId,
-        });
         try {
           // 连接/重新授权成功后 provider apiKey 会先于权益接口结果落盘。
           // pending 必须等本轮权益刷新完成后再清，否则 Plan Card 会短暂显示旧套餐态或非 loading 状态。
@@ -782,36 +763,6 @@ export function ModelProviderSection({
       platform.openExternal(normalizedUrl);
     },
     [platform],
-  );
-
-  const handleCodingPlanLogin = useCallback(
-    (
-      presetId: BuiltinModelProviderId,
-      providerId: OAuthProviderId,
-      providerName: string,
-      status: CodingPlanStatus,
-      options?: CodingPlanLoginOptions,
-    ) => {
-      setPresetSubscriptionProviderId(presetId);
-      setCodingPlanStatusSyncProviderId(presetId);
-      logger.info("[ModelProviderSection] 请求通过统一登录入口登录并连接 Coding Plan", {
-        presetId,
-        providerId,
-        providerName,
-        status,
-        forceOAuth: options?.forceOAuth === true,
-      });
-      if (activeOAuthProvider === providerId && options?.forceOAuth !== true) {
-        void refreshProviderPanelAfterAuthChange({}).finally(() => {
-          setPresetSubscriptionProviderId((current) => (current === presetId ? null : current));
-          setCodingPlanStatusSyncProviderId((current) => (current === presetId ? null : current));
-        });
-        return;
-      }
-      // ZAI/BigModel provider 不再有独立 connection，Connect 必须切换 App active provider。
-      return requestLoginEntry(providerId);
-    },
-    [activeOAuthProvider, refreshProviderPanelAfterAuthChange, requestLoginEntry],
   );
 
   const handleCodingPlanDisconnect = useCallback(
@@ -1115,10 +1066,6 @@ export function ModelProviderSection({
               : (entitlement?.snapshot?.subscription?.details.length ?? 0);
           })()}
           presetLoading={presetLoading}
-          codingPlanAuthError={oauthError}
-          codingPlanPurchaseTokenAuthenticatedByProviderId={
-            codingPlanPurchaseTokenAuthenticatedByProviderId
-          }
           presetSubscriptionProviderId={presetSubscriptionProviderId}
           codingPlanStatusSyncProviderId={codingPlanStatusSyncProviderId}
           codingPlanDisconnectProviderId={codingPlanDisconnectProviderId}
@@ -1132,7 +1079,6 @@ export function ModelProviderSection({
           // Provider 的 Effective 模型无法写入 Personal modelOrder。模型调序独立于成员来源。
           onReorderProviderModels={reorderProviderModels}
           onTestModel={handleTestModel}
-          onCodingPlanLogin={handleCodingPlanLogin}
           onRetryCodingPlan={() => {
             // 取 Key 失败不等于登录失效；沿用 Host 手动刷新，不清除 OAuth 或重新登录。
             logger.info("[ModelProviderSection] 重试获取套餐状态");
@@ -1143,17 +1089,9 @@ export function ModelProviderSection({
           onCodingPlanDisconnect={handleCodingPlanDisconnect}
           onOpenApiKeyUrl={handleOpenApiKeyUrl}
           onSelectNavItem={handleSelectNavItem}
-          onOpenBigModelRegistration={() => {
-            // 未注册提示来自一次失败的 OAuth checking 状态；跳转注册后要恢复普通状态，避免提示卡住。
-            setOAuthError(null);
-            setPresetSubscriptionProviderId((current) =>
-              current === BUILTIN_MODEL_PROVIDER_IDS.bigmodelIndividualCodingPlan ? null : current,
-            );
-            platform.openExternal(BIGMODEL_REGISTRATION_URL);
-          }}
-          onCodingPlanPurchaseComplete={async () => {
-            await refreshProviderPanelAfterAuthChange({ refreshReason: "purchase" });
-          }}
+          onRefreshProviderState={() =>
+            refreshProviderPanelAfterAuthChange({ refreshReason: "auth" })
+          }
         />
       )}
     </ModelProviderSectionLayout>

@@ -101,7 +101,7 @@ Slash Commands:
       title: "需要配置模型",
     },
     loginSetup: {
-      emptyMessage: "没有可用的登录选项。",
+      emptyMessage: "没有可用的 API key 选项。",
       help: "使用 Up/Down 选择，Enter 确认。",
       options: {
         bigmodelApiKey: {
@@ -110,29 +110,12 @@ Slash Commands:
           primary: "BigModel Coding Plan API Key",
           secondary: "手动粘贴 Coding Plan API key。",
         },
-        bigmodelOauth: {
-          pendingPrimary: "等待 BigModel 授权",
-          pendingSecondary: "请在浏览器里完成登录，授权成功后会自动继续配置。",
-          primary: "BigModel Coding Plan",
-          secondary: "打开浏览器登录，CLI 会自动查询授权结果。",
-        },
         zaiApiKey: {
           inputPrimary: "输入 Z.AI Coding Plan API Key",
           inputSecondary: "在这里粘贴 key，输入时会隐藏显示。",
           primary: "Z.AI Coding Plan API Key",
           secondary: "手动粘贴 Coding Plan API key。",
         },
-        zaiOauth: {
-          pendingPrimary: "等待 Z.AI 授权",
-          pendingSecondary: "请在浏览器里完成登录。授权完成后会继续配置。",
-          primary: "Z.AI Coding Plan",
-          secondary: "打开浏览器登录，并创建 Coding Plan API key。",
-        },
-      },
-      pending: {
-        cancelStatus: "已取消登录。请选择配置方式。",
-        help: "按 Esc 取消，并返回配置方式选择。",
-        status: "正在等待浏览器授权...",
       },
       input: {
         cancelStatus: "已取消 API key 输入。请选择配置方式。",
@@ -143,7 +126,7 @@ Slash Commands:
         status: "输入 API key 后按 Enter。",
         submitStatus: "正在保存 API key...",
       },
-      prompt: "选择登录或 API key 配置方式。",
+      prompt: "选择 API key 配置方式。",
       response: "选择 Coding Plan 提供商的配置方式。",
       title: "配置 Coding Plan",
     },

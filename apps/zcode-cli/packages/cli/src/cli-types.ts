@@ -18,10 +18,6 @@ import type {
   inspectZCodeCustomCommand,
   InspectZCodeCustomCommandOptions,
   InspectZCodeSkillOptions,
-  loginZCodeCli,
-  loginBigmodelCodingPlan,
-  LoginBigmodelCodingPlanOptions,
-  LoginZCodeCliOptions,
   listZCodeCustomCommands,
   ListZCodeCustomCommandsOptions,
   loadZCodeCustomCommand,
@@ -74,10 +70,6 @@ export interface RunDependencies extends PluginsCommandOverrides {
   inspectCustomCommand?: (
     options: InspectZCodeCustomCommandOptions,
   ) => ReturnType<typeof inspectZCodeCustomCommand>;
-  loginZCodeCli?: (options?: LoginZCodeCliOptions) => ReturnType<typeof loginZCodeCli>;
-  loginBigmodelCodingPlan?: (
-    options?: LoginBigmodelCodingPlanOptions,
-  ) => ReturnType<typeof loginBigmodelCodingPlan>;
   configureCodingPlanApiKey?: (
     options: ConfigureCodingPlanApiKeyOptions,
   ) => ReturnType<typeof configureCodingPlanApiKey>;

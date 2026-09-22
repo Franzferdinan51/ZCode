@@ -18,10 +18,6 @@ import {
 import { decodeZCodeBuiltinRelease } from "../../provider-node/src/zcode-builtin-release.js";
 import { fetchLmStudioModelCatalog } from "../../provider-node/src/lm-studio-model-catalog.js";
 import { LmStudioCatalogOverlaySource } from "../../provider-node/src/lm-studio-catalog-source.js";
-import {
-  resolveProviderAvailabilityState,
-  shouldOpenProviderLoginEntry,
-} from "../src/lib/modelProviderAvailability.js";
 
 const builtinPath = fileURLToPath(
   new URL("../../../config/provider/zcode-builtin.json", import.meta.url),
@@ -328,23 +324,11 @@ test("LM_STUDIO_MODEL moves the configured id to the front of the overlaid catal
   }
 });
 
-test("usable LM Studio registry does not open the Z.ai login wall", () => {
+test("usable LM Studio registry resolves with no login concept", () => {
   const { resolution } = resolveBuiltinRegistry(true);
-  const availability = resolveProviderAvailabilityState({
-    modelSelectionView: {
-      providers: resolution.registryProviders.map((provider) => ({
-        providerId: provider.providerId,
-        models: provider.models,
-      })),
-    } as never,
-  });
-  assert.equal(availability.hasUsableProvider, true);
-  assert.equal(
-    shouldOpenProviderLoginEntry({
-      hasUsableProvider: availability.hasUsableProvider,
-      hasUser: false,
-    }),
-    false,
+  const usable = resolution.registryProviders.filter(
+    (provider) => provider.models.length > 0,
   );
-  assert.equal(shouldOpenProviderLoginEntry({ hasUsableProvider: false, hasUser: false }), true);
+  assert.ok(usable.length > 0);
+  assert.equal(usable[0]?.providerId, LM_STUDIO_PROVIDER_ID);
 });

@@ -16,7 +16,7 @@ import {
   readHeadlessRuntimeFacts,
   waitForHeadlessWorkflowSettle,
 } from "./headless-workflow.js";
-import { runLoginCommand, runLogoutCommand } from "./login-command.js";
+import { runLogoutCommand } from "./login-command.js";
 import { resolveResumeSession } from "./resume.js";
 import { readRuntimeEventSubscriber } from "./runtime-event-subscriber.js";
 import {
@@ -87,11 +87,10 @@ export const runPrompt = async (
     return await runSkillsCommand(ctx, options, deps, []);
   }
   if (slashCommand?.type === "known" && slashCommand.name === "login") {
-    if (slashCommand.args.length > 0) {
-      ctx.stderr.write("Usage: /login\n");
-      return 1;
-    }
-    return await runLoginCommand(ctx, options, deps, false);
+    ctx.stderr.write(
+      "Browser login was removed. In interactive mode use: /login [zai-coding-plan-api-key <api-key>|bigmodel-coding-plan-api-key <api-key>]\n",
+    );
+    return 1;
   }
   if (slashCommand?.type === "known" && slashCommand.name === "logout") {
     if (slashCommand.args.length > 0) {

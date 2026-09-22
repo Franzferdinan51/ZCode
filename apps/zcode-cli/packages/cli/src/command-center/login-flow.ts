@@ -1,7 +1,5 @@
-import type { TuiSelection, TuiSubmitPrompt } from "@zcode/tui";
+import type { TuiSelection } from "@zcode/tui";
 import { getZCodeCopy } from "@zcode/i18n";
-import type { CommandCenterApp, CommandCenterLoginResult } from "./types.js";
-import { randomUUID } from "node:crypto";
 
 export function buildLoginSelection(locale?: string): TuiSelection {
   const copy = getZCodeCopy(locale).tui.loginSetup;
@@ -10,34 +8,6 @@ export function buildLoginSelection(locale?: string): TuiSelection {
     filterable: false,
     help: copy.help,
     items: [
-      {
-        command: "/login zai-coding-plan",
-        id: "zai-coding-plan",
-        keywords: ["zai", "oauth", "coding", "plan"],
-        pending: {
-          cancelStatus: copy.pending.cancelStatus,
-          help: copy.pending.help,
-          primary: copy.options.zaiOauth.pendingPrimary,
-          secondary: copy.options.zaiOauth.pendingSecondary,
-          status: copy.pending.status,
-        },
-        primary: copy.options.zaiOauth.primary,
-        secondary: copy.options.zaiOauth.secondary,
-      },
-      {
-        command: "/login bigmodel-coding-plan",
-        id: "bigmodel-coding-plan",
-        keywords: ["bigmodel", "oauth", "coding", "plan"],
-        pending: {
-          cancelStatus: copy.pending.cancelStatus,
-          help: copy.pending.help,
-          primary: copy.options.bigmodelOauth.pendingPrimary,
-          secondary: copy.options.bigmodelOauth.pendingSecondary,
-          status: copy.pending.status,
-        },
-        primary: copy.options.bigmodelOauth.primary,
-        secondary: copy.options.bigmodelOauth.secondary,
-      },
       {
         command: "/login zai-coding-plan-api-key",
         id: "zai-coding-plan-api-key",
@@ -86,21 +56,6 @@ export function loginSetupResponse(locale?: string): string {
   return getZCodeCopy(locale).tui.loginSetup.response;
 }
 
-export function formatLoginResult(result: CommandCenterLoginResult): string {
-  const label = result.user.name || result.user.email || result.user.user_id;
-  const browserNote =
-    result.browser && !result.browser.opened
-      ? `\nBrowser open failed: ${result.browser.reason ?? "unknown error"}`
-      : "";
-
-  return [
-    `Configured Z.AI Coding Plan as ${label}.`,
-    `Model: ${result.model}`,
-    `Credentials: ${result.credentialsPath}`,
-    `Model selection: ${result.configPath}${browserNote}`,
-  ].join("\n");
-}
-
 export function formatProviderSetupResult(result: {
   configPath: string;
   model: string;
@@ -112,34 +67,6 @@ export function formatProviderSetupResult(result: {
     `Model: ${result.model}`,
     `Model selection: ${result.configPath}`,
   ].join("\n");
-}
-
-export async function emitLoginAuthorizeMessage(
-  options: Parameters<TuiSubmitPrompt>[1],
-  authorizeUrl: string,
-  providerName: string,
-  session: Pick<CommandCenterApp, "sessionId" | "traceId">,
-): Promise<void> {
-  const onEvent = options.onEvent;
-  if (!onEvent) return;
-
-  await onEvent({
-    id: `local-login-authorize-${randomUUID()}` as never,
-    payload: {
-      content: [
-        `Open this URL to sign in with ${providerName}:`,
-        "",
-        authorizeUrl,
-        "",
-        "After authorization, return here and I will finish the login automatically.",
-      ].join("\n"),
-    },
-    sequenceNumber: 0,
-    sessionId: session.sessionId as never,
-    timestamp: new Date(),
-    traceId: session.traceId as never,
-    type: "assistant_message" as never,
-  });
 }
 
 export function parseApiKeyLoginArgs(args: string): {
