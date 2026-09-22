@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.19.0 (2026-09-22)
+
+### Features
+
+* local-first ML routing (Jeff-1/SystemOne/Laya) + Hermes speed ports (FTS5, failover) ([c5478e5](https://github.com/Franzferdinan51/ZCode/commit/c5478e5bec34faa12fb6724e0c28812d6c85aced))
+  * Async AutoRouteScorer seam + Jev-compatible protocol (fail-open)
+  * Local sidecar: Jeff-1/SystemOne endpoints + persistent Laya bridge
+  * Settings > General opt-in card (default OFF) + async draft upgrade
+  * Hermes: FTS5 task search + 429/5xx same-provider failover
+  * Tests 62/62, typecheck/lint/architecture green
+
 ## 3.18.0 (2026-09-22)
 
 ### Features
