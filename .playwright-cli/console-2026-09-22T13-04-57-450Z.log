@@ -1,0 +1,210 @@
+[    2968ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=e3a29f0b:14337
+[    3184ms] [LOG] [2026-09-22 09:05:00.633] [ui] [Root] 恢复组合 workspace 会话 {count: 2, activeIndex: 0} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    3227ms] [LOG] [2026-09-22 09:05:00.676] [ui] v4 conversation frame upstream attached {workspaceKey: /Users/duckets/ZCode, workspacePath: /Users/duckets/ZCode, event: v4.conversation.frames.upstream_attached, listenerCount: 1, module: ui.v4.conversation_transport} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    3227ms] [LOG] [2026-09-22 09:05:00.676] [ui] v4 workspace connection created {event: v4.workspace_connection.created, isRemote: false, key: __base__ /Users/duckets/ZCode, module: ui.v4.workspace_connection_registry, refCount: 1} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    3263ms] [ERROR] React has detected a change in the order of Hooks called by %s. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: https://react.dev/link/rules-of-hooks
+
+   Previous render            Next render
+   ------------------------------------------------------
+%s   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ OnboardingDialog 1. useContext                 useContext
+2. useCallback                useCallback
+3. useCallback                useCallback
+4. useSyncExternalStore       useSyncExternalStore
+5. useDebugValue              useDebugValue
+6. useContext                 useContext
+7. useContext                 useContext
+8. useRef                     useContext
+ @ http://localhost:5173/@vite/client:509
+[    3276ms] [LOG] [2026-09-22 09:05:00.726] [ui] v4 workspace connection reused {event: v4.workspace_connection.reused, isRemote: false, key: __base__ /Users/duckets/ZCode, module: ui.v4.workspace_connection_registry, refCount: 2} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    3307ms] [ERROR] %o
+
+%s
+
+%s
+ TypeError: Cannot read properties of undefined (reading 'length')
+    at areHookInputsEqual (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=e3a29f0b:4197:33)
+    at updateCallback (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=e3a29f0b:4924:25)
+    at Object.useCallback (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=e3a29f0b:13243:12)
+    at exports.useCallback (http://localhost:5173/node_modules/.vite/deps/react.js?v=496576db:701:31)
+    at useStore (http://localhost:5173/node_modules/.vite/deps/zustand.js?v=7b42d785:36:78)
+    at useTabStore (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/store/TabStoreProvider.tsx:62:9)
+    at useResolvedRemoteWorkspaceSessionId (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/hooks/useResolvedRemoteWorkspaceSessionId.ts:21:29)
+    at useWorkspaceServicesResolution (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/hooks/useWorkspaceServices.tsx:98:34)
+    at useWorkspaceServices (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/hooks/useWorkspaceServices.tsx:147:9)
+    at useZCodeSessionService (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/hooks/useZCodeSessionService.ts:4:35) The above error occurred in the <OnboardingDialog> component. React will try to recreate this component tree from scratch using the error boundary you provided, ScopedErrorBoundary. @ http://localhost:5173/@vite/client:509
+[    3307ms] [ERROR] [2026-09-22 09:05:00.757] [ui] [ScopedErrorBoundary:onboarding-dialog] React subtree crashed: {name: TypeError, message: Cannot read properties of undefined (reading 'length'), stack: TypeError: Cannot read properties of undefined (re…ages/ui/src/hooks/useZCodeSessionService.ts:4:35)} 
+    at OnboardingDialog (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/onboarding/OnboardingDialog.tsx:32:19)
+    at ScopedErrorBoundary (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/ErrorBoundary.tsx:437:8)
+    at OccupationOnboarding (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/onboarding/OccupationOnboarding.tsx:27:40)
+    at div (<anonymous>)
+    at RootShell (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/root/RootShell.tsx:6:29)
+    at RootInner (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/Root.tsx:120:22)
+    at AssistantCodeCommentFeatureProvider (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/AssistantCodeCommentFeatureProvider.tsx:8:55)
+    at WorkerPoolContextProvider (http://localhost:5173/node_modules/.vite/deps/@pierre_diffs_react.js?v=6e958655:800:38)
+    at DiffsWorkerPoolProvider (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/root/DiffsWorkerPoolProvider.tsx:49:43)
+    at TabStoreProvider (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/store/TabStoreProvider.tsx:16:36)
+    at StoreProvider (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/store/StoreProvider.tsx:15:33)
+    at PlatformProvider (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/hooks/usePlatform.tsx:13:36)
+    at ServiceProvider (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/hooks/useServices.tsx:12:35)
+    at Provider (http://localhost:5173/node_modules/.vite/deps/dist-BT8worHf2.js?v=7d911eed:70:12)
+    at TooltipProvider (http://localhost:5173/node_modules/.vite/deps/radix-ui.js?v=6e08ff62:11373:10)
+    at TooltipProvider (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/components/ui/tooltip.tsx:7:28)
+    at LucideProvider (http://localhost:5173/node_modules/.vite/deps/Icon-CV3swUxk.js?v=7d911eed:54:27)
+    at Root (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/Root.tsx:69:20)
+    at ZCodeIntlProvider (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/i18n/IntlProvider.tsx:79:37)
+    at AppErrorBoundary (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/ErrorBoundary.tsx:371:8) @ http://localhost:5173/@vite/client:509
+[    3311ms] [LOG] [2026-09-22 09:05:00.760] [ui] [v4-sessions-index] workspace subscription set reconciled {acquiredScopeKeys: Array(1), releasedScopeKeys: Array(0), activeCount: 1} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    3318ms] [LOG] [2026-09-22 09:05:00.767] [ui] [mcpStore] loadMcpFromUserDirectory workspace=/Users/duckets/ZCode identity=<none> @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    3320ms] [LOG] [2026-09-22 09:05:00.769] [ui] [RootWorkspaceContent] settings layer visibility changed {isSettingsTabActive: false, workspaceShellPath: /Users/duckets/ZCode, workspaceHiddenByLayout: false} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    3320ms] [LOG] [2026-09-22 09:05:00.770] [ui] [Root] settings view closed workspace=/Users/duckets/ZCode @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    3375ms] [LOG] [2026-09-22 09:05:00.825] [ui] v4 conversation frame upstream attached {workspaceKey: /Users/duckets/ZCode/packages/server, workspacePath: /Users/duckets/ZCode/packages/server, event: v4.conversation.frames.upstream_attached, listenerCount: 1, module: ui.v4.conversation_transport} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    3375ms] [LOG] [2026-09-22 09:05:00.825] [ui] v4 workspace connection created {event: v4.workspace_connection.created, isRemote: false, key: __base__ /Users/duckets/ZCode/packages/server, module: ui.v4.workspace_connection_registry, refCount: 1} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    3397ms] [LOG] [2026-09-22 09:05:00.846] [ui] v4 workspace connection lease released {event: v4.workspace_connection.release, key: __base__ /Users/duckets/ZCode, module: ui.v4.workspace_connection_registry, refCount: 1, status: completed} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    3399ms] [LOG] [2026-09-22 09:05:00.848] [ui] [v4-sessions-index] workspace subscription set reconciled {acquiredScopeKeys: Array(1), releasedScopeKeys: Array(0), activeCount: 2} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    3401ms] [LOG] [2026-09-22 09:05:00.850] [ui] [RootWorkspaceContent] settings layer visibility changed {isSettingsTabActive: false, workspaceShellPath: /Users/duckets/ZCode/packages/server, workspaceHiddenByLayout: false} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    3401ms] [LOG] [2026-09-22 09:05:00.851] [ui] [Root] settings view closed workspace=/Users/duckets/ZCode/packages/server @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    3427ms] [LOG] [2026-09-22 09:05:00.877] [ui] [mcpStore] loadMcpFromUserDirectory workspace=/Users/duckets/ZCode/packages/server identity=<none> @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    3428ms] [LOG] [2026-09-22 09:05:00.877] [ui] [LexicalChatInput] 输入编辑器首帧完成 {durationMs: 149, activeTaskProvider: glm, disabled: false, hasPromptHistory: false, submitDisabled: true} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    4068ms] [LOG] [2026-09-22 09:05:01.517] [ui] [zcode-workspace-presentation] workspace prepare start {workspacePath: /Users/duckets/ZCode/packages/server, workspaceIdentity: null, provider: glm} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    4339ms] [WARNING] [2026-09-22 09:05:01.789] [ui] [windowControllerTaskListRegistry] Controller subscribe 失败 Unknown channel: Channel name 'window-controller' timed out after 1000ms
+    at handler (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:65:22)
+    at ChannelClient.onResponse (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:196:35)
+    at ChannelClient.onBuffer (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:182:10)
+    at http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:23:65
+    at Emitter.fire (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/foundation.ts:115:4)
+    at SocketProtocol.readMessages (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/protocol.ts:203:21)
+    at http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/protocol.ts:166:9
+    at Emitter.fire (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/foundation.ts:115:4)
+    at WebSocket.<anonymous> (http://localhost:5173/@fs/Users/duckets/ZCode/packages/client/src/websocket.ts:9:10) @ http://localhost:5173/@vite/client:509
+[    4340ms] [ERROR] [2026-09-22 09:05:01.789] [ui] [useGlobalTaskList] Controller 加载 timeline 列表失败 Unknown channel: Channel name 'window-controller' timed out after 1000ms
+    at handler (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:65:22)
+    at ChannelClient.onResponse (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:196:35)
+    at ChannelClient.onBuffer (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:182:10)
+    at http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:23:65
+    at Emitter.fire (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/foundation.ts:115:4)
+    at SocketProtocol.readMessages (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/protocol.ts:203:21)
+    at http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/protocol.ts:166:9
+    at Emitter.fire (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/foundation.ts:115:4)
+    at WebSocket.<anonymous> (http://localhost:5173/@fs/Users/duckets/ZCode/packages/client/src/websocket.ts:9:10) @ http://localhost:5173/@vite/client:509
+[    4931ms] [LOG] [2026-09-22 09:05:02.380] [ui] [zcode-workspace-presentation] readWorkspacePresentation done {workspacePath: /Users/duckets/ZCode/packages/server, workspaceIdentity: null, provider: glm, readPresentationDurationMs: 863, totalDurationMs: 863} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    4975ms] [LOG] [2026-09-22 09:05:02.425] [ui] [v4-draft-prewarm] draft session 预热就绪 {sessionId: sess_116da609-41f2-4564-bea9-8a15dd8352ed, workspaceKey: /Users/duckets/ZCode/packages/server} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    4982ms] [LOG] [2026-09-22 09:05:02.431] [ui] v4 conversation store connect started {event: v4.conversation.store.connect.started, generation: 1, hasBase: false, module: ui.v4.conversation_projection_store, status: started} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    4982ms] [LOG] [2026-09-22 09:05:02.432] [ui] v4 conversation subscription started {workspaceKey: /Users/duckets/ZCode/packages/server, workspacePath: /Users/duckets/ZCode/packages/server, event: v4.conversation.subscribe.started, module: ui.v4.conversation_transport, runtimeGeneration: 0} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    4982ms] [LOG] [2026-09-22 09:05:02.432] [ui] v4 session data lease acquired {event: v4.session_data.acquire, keepWarm: false, module: ui.v4.session_data_layer, openKind: cold, refCount: 1} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    5003ms] [LOG] [2026-09-22 09:05:02.452] [ui] v4 conversation subscription acknowledged {workspaceKey: /Users/duckets/ZCode/packages/server, workspacePath: /Users/duckets/ZCode/packages/server, durationMs: 20, event: v4.conversation.subscribe.acknowledged, module: ui.v4.conversation_transport} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    5003ms] [LOG] [2026-09-22 09:05:02.452] [ui] v4 conversation subscription activated {workspaceKey: /Users/duckets/ZCode/packages/server, workspacePath: /Users/duckets/ZCode/packages/server, event: v4.conversation.subscribe.activated, module: ui.v4.conversation_transport, runtimeGeneration: 0} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    5003ms] [LOG] [2026-09-22 09:05:02.453] [ui] v4 conversation store connect completed {durationMs: 22, event: v4.conversation.store.connect.completed, generation: 1, logEpoch: mucos8he-77942juo, mode: snapshot} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    5022ms] [ERROR] [2026-09-22 09:05:02.471] [ui] [useGlobalTaskList] Controller 加载 pinned 列表失败 Unknown channel: Channel name 'window-controller' timed out after 1000ms
+    at handler (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:65:22)
+    at ChannelClient.onResponse (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:196:35)
+    at ChannelClient.onBuffer (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:182:10)
+    at http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:23:65
+    at Emitter.fire (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/foundation.ts:115:4)
+    at SocketProtocol.readMessages (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/protocol.ts:203:21)
+    at http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/protocol.ts:166:9
+    at Emitter.fire (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/foundation.ts:115:4)
+    at WebSocket.<anonymous> (http://localhost:5173/@fs/Users/duckets/ZCode/packages/client/src/websocket.ts:9:10) @ http://localhost:5173/@vite/client:509
+[    8457ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=5d18dcc4:14337
+[    8600ms] [LOG] [2026-09-22 09:05:06.050] [ui] [Root] 恢复组合 workspace 会话 {count: 3, activeIndex: 0} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    8631ms] [LOG] [2026-09-22 09:05:06.080] [ui] v4 conversation frame upstream attached {workspaceKey: /Users/duckets/ZCode/packages/server, workspacePath: /Users/duckets/ZCode/packages/server, event: v4.conversation.frames.upstream_attached, listenerCount: 1, module: ui.v4.conversation_transport} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    8631ms] [LOG] [2026-09-22 09:05:06.080] [ui] v4 workspace connection created {event: v4.workspace_connection.created, isRemote: false, key: __base__ /Users/duckets/ZCode/packages/server, module: ui.v4.workspace_connection_registry, refCount: 1} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    8664ms] [ERROR] React has detected a change in the order of Hooks called by %s. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: https://react.dev/link/rules-of-hooks
+
+   Previous render            Next render
+   ------------------------------------------------------
+%s   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ OnboardingDialog 1. useContext                 useContext
+2. useCallback                useCallback
+3. useCallback                useCallback
+4. useSyncExternalStore       useSyncExternalStore
+5. useDebugValue              useDebugValue
+6. useContext                 useContext
+7. useContext                 useContext
+8. useRef                     useContext
+ @ http://localhost:5173/@vite/client:509
+[    8676ms] [LOG] [2026-09-22 09:05:06.126] [ui] v4 workspace connection reused {event: v4.workspace_connection.reused, isRemote: false, key: __base__ /Users/duckets/ZCode/packages/server, module: ui.v4.workspace_connection_registry, refCount: 2} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    8699ms] [ERROR] %o
+
+%s
+
+%s
+ TypeError: Cannot read properties of undefined (reading 'length')
+    at areHookInputsEqual (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=5d18dcc4:4197:33)
+    at updateCallback (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=5d18dcc4:4924:25)
+    at Object.useCallback (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=5d18dcc4:13243:12)
+    at exports.useCallback (http://localhost:5173/node_modules/.vite/deps/react.js?v=5d18dcc4:701:31)
+    at useStore (http://localhost:5173/node_modules/.vite/deps/zustand.js?v=5d18dcc4:36:78)
+    at useTabStore (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/store/TabStoreProvider.tsx:62:9)
+    at useResolvedRemoteWorkspaceSessionId (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/hooks/useResolvedRemoteWorkspaceSessionId.ts:21:29)
+    at useWorkspaceServicesResolution (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/hooks/useWorkspaceServices.tsx:98:34)
+    at useWorkspaceServices (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/hooks/useWorkspaceServices.tsx:147:9)
+    at useZCodeSessionService (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/hooks/useZCodeSessionService.ts:4:35) The above error occurred in the <OnboardingDialog> component. React will try to recreate this component tree from scratch using the error boundary you provided, ScopedErrorBoundary. @ http://localhost:5173/@vite/client:509
+[    8699ms] [ERROR] [2026-09-22 09:05:06.149] [ui] [ScopedErrorBoundary:onboarding-dialog] React subtree crashed: {name: TypeError, message: Cannot read properties of undefined (reading 'length'), stack: TypeError: Cannot read properties of undefined (re…ages/ui/src/hooks/useZCodeSessionService.ts:4:35)} 
+    at OnboardingDialog (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/onboarding/OnboardingDialog.tsx:32:19)
+    at ScopedErrorBoundary (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/ErrorBoundary.tsx:437:8)
+    at OccupationOnboarding (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/onboarding/OccupationOnboarding.tsx:27:40)
+    at div (<anonymous>)
+    at RootShell (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/root/RootShell.tsx:6:29)
+    at RootInner (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/Root.tsx:120:22)
+    at AssistantCodeCommentFeatureProvider (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/AssistantCodeCommentFeatureProvider.tsx:8:55)
+    at WorkerPoolContextProvider (http://localhost:5173/node_modules/.vite/deps/@pierre_diffs_react.js?v=5d18dcc4:800:38)
+    at DiffsWorkerPoolProvider (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/root/DiffsWorkerPoolProvider.tsx:49:43)
+    at TabStoreProvider (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/store/TabStoreProvider.tsx:16:36)
+    at StoreProvider (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/store/StoreProvider.tsx:15:33)
+    at PlatformProvider (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/hooks/usePlatform.tsx:13:36)
+    at ServiceProvider (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/hooks/useServices.tsx:12:35)
+    at Provider (http://localhost:5173/node_modules/.vite/deps/dist-D_Y6se1y.js?v=5d18dcc4:70:12)
+    at TooltipProvider (http://localhost:5173/node_modules/.vite/deps/radix-ui.js?v=5d18dcc4:11373:10)
+    at TooltipProvider (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/components/ui/tooltip.tsx:7:28)
+    at LucideProvider (http://localhost:5173/node_modules/.vite/deps/Icon-9EPZiKwj.js?v=5d18dcc4:54:27)
+    at Root (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/Root.tsx:69:20)
+    at ZCodeIntlProvider (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/i18n/IntlProvider.tsx:79:37)
+    at AppErrorBoundary (http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/ErrorBoundary.tsx:371:8) @ http://localhost:5173/@vite/client:509
+[    8702ms] [LOG] [2026-09-22 09:05:06.151] [ui] [v4-sessions-index] workspace subscription set reconciled {acquiredScopeKeys: Array(2), releasedScopeKeys: Array(0), activeCount: 2} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    8708ms] [LOG] [2026-09-22 09:05:06.158] [ui] [mcpStore] loadMcpFromUserDirectory workspace=/Users/duckets/ZCode/packages/server identity=<none> @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    8709ms] [LOG] [2026-09-22 09:05:06.158] [ui] [RootWorkspaceContent] settings layer visibility changed {isSettingsTabActive: false, workspaceShellPath: /Users/duckets/ZCode/packages/server, workspaceHiddenByLayout: false} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    8709ms] [LOG] [2026-09-22 09:05:06.159] [ui] [Root] settings view closed workspace=/Users/duckets/ZCode/packages/server @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    8778ms] [LOG] [2026-09-22 09:05:06.227] [ui] [LexicalChatInput] 输入编辑器首帧完成 {durationMs: 99, activeTaskProvider: glm, disabled: false, hasPromptHistory: false, submitDisabled: true} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    8848ms] [LOG] [2026-09-22 09:05:06.297] [ui] [zcode-workspace-presentation] workspace prepare start {workspacePath: /Users/duckets/ZCode/packages/server, workspaceIdentity: null, provider: glm} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    8872ms] [LOG] [2026-09-22 09:05:06.321] [ui] [zcode-workspace-presentation] readWorkspacePresentation done {workspacePath: /Users/duckets/ZCode/packages/server, workspaceIdentity: null, provider: glm, readPresentationDurationMs: 24, totalDurationMs: 24} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    8896ms] [LOG] [2026-09-22 09:05:06.346] [ui] [v4-draft-prewarm] draft session 预热就绪 {sessionId: sess_c0b9621f-5dd2-4e3e-91b3-c4a989387a40, workspaceKey: /Users/duckets/ZCode/packages/server} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    8899ms] [LOG] [2026-09-22 09:05:06.348] [ui] v4 conversation store connect started {event: v4.conversation.store.connect.started, generation: 1, hasBase: false, module: ui.v4.conversation_projection_store, status: started} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    8899ms] [LOG] [2026-09-22 09:05:06.348] [ui] v4 conversation subscription started {workspaceKey: /Users/duckets/ZCode/packages/server, workspacePath: /Users/duckets/ZCode/packages/server, event: v4.conversation.subscribe.started, module: ui.v4.conversation_transport, runtimeGeneration: 0} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    8899ms] [LOG] [2026-09-22 09:05:06.348] [ui] v4 session data lease acquired {event: v4.session_data.acquire, keepWarm: false, module: ui.v4.session_data_layer, openKind: cold, refCount: 1} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    8908ms] [LOG] [2026-09-22 09:05:06.357] [ui] v4 conversation subscription acknowledged {workspaceKey: /Users/duckets/ZCode/packages/server, workspacePath: /Users/duckets/ZCode/packages/server, durationMs: 9, event: v4.conversation.subscribe.acknowledged, module: ui.v4.conversation_transport} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    8909ms] [LOG] [2026-09-22 09:05:06.359] [ui] v4 conversation subscription activated {workspaceKey: /Users/duckets/ZCode/packages/server, workspacePath: /Users/duckets/ZCode/packages/server, event: v4.conversation.subscribe.activated, module: ui.v4.conversation_transport, runtimeGeneration: 0} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    8909ms] [LOG] [2026-09-22 09:05:06.359] [ui] v4 conversation store connect completed {durationMs: 11, event: v4.conversation.store.connect.completed, generation: 1, logEpoch: mucosbht-9cagdaf6, mode: snapshot} @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:25
+[    9701ms] [WARNING] [2026-09-22 09:05:07.151] [ui] [windowControllerTaskListRegistry] Controller subscribe 失败 Unknown channel: Channel name 'window-controller' timed out after 1000ms
+    at handler (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:65:22)
+    at ChannelClient.onResponse (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:196:35)
+    at ChannelClient.onBuffer (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:182:10)
+    at http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:23:65
+    at Emitter.fire (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/foundation.ts:115:4)
+    at SocketProtocol.readMessages (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/protocol.ts:203:21)
+    at http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/protocol.ts:166:9
+    at Emitter.fire (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/foundation.ts:115:4)
+    at WebSocket.<anonymous> (http://localhost:5173/@fs/Users/duckets/ZCode/packages/client/src/websocket.ts:9:10) @ http://localhost:5173/@vite/client:509
+[    9702ms] [ERROR] [2026-09-22 09:05:07.152] [ui] [useGlobalTaskList] Controller 加载 pinned 列表失败 Unknown channel: Channel name 'window-controller' timed out after 1000ms
+    at handler (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:65:22)
+    at ChannelClient.onResponse (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:196:35)
+    at ChannelClient.onBuffer (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:182:10)
+    at http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:23:65
+    at Emitter.fire (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/foundation.ts:115:4)
+    at SocketProtocol.readMessages (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/protocol.ts:203:21)
+    at http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/protocol.ts:166:9
+    at Emitter.fire (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/foundation.ts:115:4)
+    at WebSocket.<anonymous> (http://localhost:5173/@fs/Users/duckets/ZCode/packages/client/src/websocket.ts:9:10) @ http://localhost:5173/@vite/client:509
+[    9703ms] [ERROR] [2026-09-22 09:05:07.153] [ui] [useGlobalTaskList] Controller 加载 timeline 列表失败 Unknown channel: Channel name 'window-controller' timed out after 1000ms
+    at handler (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:65:22)
+    at ChannelClient.onResponse (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:196:35)
+    at ChannelClient.onBuffer (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:182:10)
+    at http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/channelClient.ts:23:65
+    at Emitter.fire (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/foundation.ts:115:4)
+    at SocketProtocol.readMessages (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/protocol.ts:203:21)
+    at http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/protocol.ts:166:9
+    at Emitter.fire (http://localhost:5173/@fs/Users/duckets/ZCode/packages/rpc/src/foundation.ts:115:4)
+    at WebSocket.<anonymous> (http://localhost:5173/@fs/Users/duckets/ZCode/packages/client/src/websocket.ts:9:10) @ http://localhost:5173/@vite/client:509
+[   68711ms] [LOG] [2026-09-22 09:06:06.160] [ui] [memory] role=renderer reason=first heapUsedKb=182917 heapTotalKb=186787 projection.rows=0 projection.stores=1 sessionStore.workspaces=1 shiki.highlighters=0 shiki.tokensCache=0 taskQueryCache.queryKeys=2 taskQueryCache.taskMetas=1 taskSnapshotCache.entries=0 taskSnapshotCache.persisted=0 toolLayout.openState=0 xterm.sessions=0 @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:81
+[  368710ms] [LOG] [2026-09-22 09:11:06.159] [ui] [memory] role=renderer reason=heartbeat heapUsedKb=192049 heapTotalKb=198568 projection.rows=0 projection.stores=1 sessionStore.workspaces=1 shiki.highlighters=0 shiki.tokensCache=0 taskQueryCache.queryKeys=2 taskQueryCache.taskMetas=1 taskSnapshotCache.entries=0 taskSnapshotCache.persisted=0 toolLayout.openState=0 xterm.sessions=0 @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:81
+[  428706ms] [LOG] [2026-09-22 09:12:06.156] [ui] [memory] role=renderer reason=changed heapUsedKb=180437 heapTotalKb=193701 projection.rows=0 projection.stores=1 sessionStore.workspaces=1 shiki.highlighters=0 shiki.tokensCache=0 taskQueryCache.queryKeys=2 taskQueryCache.taskMetas=1 taskSnapshotCache.entries=0 taskSnapshotCache.persisted=0 toolLayout.openState=0 xterm.sessions=0 @ http://localhost:5173/@fs/Users/duckets/ZCode/packages/ui/src/logger.ts:81

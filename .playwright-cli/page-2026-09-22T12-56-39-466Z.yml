@@ -1,0 +1,182 @@
+- generic:
+  - generic:
+    - generic:
+      - generic:
+        - generic [aria-hidden]:
+          - heading [level=2]: Command palette
+          - paragraph: Search and run commands available in this workspace.
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - complementary:
+                  - complementary:
+                    - generic:
+                      - generic:
+                        - generic [aria-hidden]:
+                          - group:
+                            - generic:
+                              - generic: New task
+                              - generic: ⌘ N
+                          - button:
+                            - generic: Search
+                            - generic: ⌘ K
+                          - button: Automations
+                          - button: Plugin Marketplace
+                        - generic:
+                          - generic:
+                            - generic [aria-hidden]:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - tablist:
+                                      - tab:
+                                        - generic: Group
+                                      - tab [selected]:
+                                        - generic: Project
+                                  - button
+                                - generic:
+                                  - button
+                                  - button
+                            - generic:
+                              - generic:
+                                - region "Projects":
+                                  - generic:
+                                    - generic [aria-hidden]:
+                                      - button [expanded]:
+                                        - generic: Projects
+                                      - generic:
+                                        - button
+                                        - button
+                                    - generic:
+                                      - generic:
+                                        - list [aria-hidden]:
+                                          - listitem:
+                                            - generic:
+                                              - generic:
+                                                - generic:
+                                                  - button [expanded]:
+                                                    - generic: ZCode
+                                              - generic: No tasks yet
+                                        - status
+                                - region [aria-hidden]:
+                                  - generic:
+                                    - generic:
+                                      - button [expanded]:
+                                        - generic: Tasks
+                                      - generic:
+                                        - button
+                                        - button
+                                    - generic: No tasks yet
+                              - status
+                        - generic [aria-hidden]:
+                          - generic:
+                            - button:
+                              - generic: Z
+                              - generic: ZCode
+                            - generic:
+                              - button
+              - separator [aria-hidden]
+              - generic [aria-hidden]:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - main:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic:
+                                              - generic:
+                                                - generic:
+                                                  - generic:
+                                                    - generic:
+                                                      - paragraph: Morning, ready when you are
+                                                - generic [ref=e144]:
+                                                  - generic [ref=e146]:
+                                                    - generic [ref=e147]:
+                                                      - generic [ref=e148]:
+                                                        - button
+                                                        - button [ref=e198]:
+                                                          - generic [ref=e150]: ZCode
+                                                      - button [ref=e199]:
+                                                        - generic [ref=e153]: main
+                                                    - generic [ref=e155]:
+                                                      - textbox [ref=e158]:
+                                                        - paragraph [ref=e159]: harness
+                                                      - generic [ref=e160]:
+                                                        - generic [ref=e162]:
+                                                          - button [ref=e200]:
+                                                            - generic [ref=e164]: Add context
+                                                          - button [ref=e201]:
+                                                            - generic [ref=e167]: Ask before changes
+                                                        - generic [ref=e169]:
+                                                          - generic [ref=e170]:
+                                                            - button [ref=e202]:
+                                                              - generic [ref=e203]: LM Studio/minicpm5-2b
+                                                            - combobox [ref=e205]:
+                                                              - generic [ref=e176]: "On"
+                                                            - combobox [aria-hidden] [ref=e179]
+                                                          - button [ref=e207] [cursor=pointer]:
+                                                            - generic [ref=e197]: Send
+                                                  - generic [ref=e182]:
+                                                    - button [ref=e208]:
+                                                      - generic [ref=e185]: Weekly Summary
+                                                    - button [ref=e209]:
+                                                      - generic [ref=e188]: Error Fix
+                                                    - button [ref=e210]:
+                                                      - generic [ref=e191]: PPT Creation
+                                                    - button [ref=e211]:
+                                                      - generic [ref=e194]: Idle-time task
+              - generic [ref=e195]:
+                - button [disabled]
+                - button [disabled]
+                - button
+  - dialog "Command palette" [ref=e213]:
+    - generic [ref=e214]:
+      - generic [ref=e216]:
+        - combobox [expanded] [active] [ref=e221]
+        - tablist "Command center sections" [ref=e222]:
+          - tab "All" [selected] [ref=e223]
+          - tab "Actions" [ref=e226]
+          - tab "Tasks" [ref=e233]
+          - tab "Files" [ref=e238]
+      - listbox "Suggestions" [ref=e243]:
+        - generic [ref=e244]:
+          - generic [aria-hidden] [ref=e245]: Suggested
+          - group "Suggested" [ref=e246]:
+            - option "New task ⌘ N" [selected] [ref=e247]:
+              - generic [ref=e248]: New task
+              - generic [ref=e249]: ⌘ N
+            - option "Open workspace ⌘ O" [ref=e250]:
+              - generic [ref=e251]: Open workspace
+              - generic [ref=e252]: ⌘ O
+            - option "Settings" [ref=e253]
+          - generic [aria-hidden] [ref=e255]: Panels
+          - group "Panels" [ref=e256]:
+            - option "Toggle sidebar ⌘ B" [ref=e257]:
+              - generic [ref=e258]: Toggle sidebar
+              - generic [ref=e259]: ⌘ B
+            - option "Toggle terminal ⌘ J" [ref=e260]:
+              - generic [ref=e261]: Toggle terminal
+              - generic [ref=e262]: ⌘ J
+            - option "Add terminal tab" [ref=e263]
+            - option "Add review tab" [ref=e265]
+            - option "Open Harness Router" [ref=e267]
+          - generic [aria-hidden] [ref=e269]: Configure
+          - group "Configure" [ref=e270]:
+            - option "Settings" [ref=e271]
+            - option "Switch theme to light" [ref=e273]
+            - option "Skills" [ref=e275]
+            - option "MCP Servers" [ref=e277]
+          - generic [aria-hidden] [ref=e279]: Application
+          - group "Application" [ref=e280]:
+            - option "Feedback" [ref=e281]
+            - option "Community" [ref=e283]
+            - option "Product docs" [ref=e285]
