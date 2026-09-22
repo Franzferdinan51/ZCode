@@ -691,18 +691,7 @@ function createHarnessRouterSidePaneTab(): HarnessRouterSidePaneTab {
   };
 }
 
-/**
- * Fresh workspaces open with the Harness Router tab so the fork's signature
- * picker is visible without hunting the + menu. Closing it persists for the
- * session (empty tab list normalizes to null, never reseeds).
- */
-export function createDefaultWorkspaceSidePaneState(): WorkspaceSidePaneState {
-  const tab = createHarnessRouterSidePaneTab();
-  return {
-    tabs: [tab],
-    activeTabId: tab.id,
-  };
-}
+
 
 function createTerminalSidePaneTab(options: {
   title: string;

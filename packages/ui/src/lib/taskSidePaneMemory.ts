@@ -1,6 +1,5 @@
 import type { GitChangeSourceId } from "@zcode/shared";
 import {
-  createDefaultWorkspaceSidePaneState,
   normalizeWorkspaceSidePaneState,
   type WorkspaceSidePaneState,
 } from "@/lib/workspaceSidePane.js";
@@ -70,22 +69,14 @@ export function buildTaskSidePaneMemoryKey({
   return workspaceKey.trim() ? workspaceKey : null;
 }
 
-function createFreshTaskSidePaneMemoryState(): TaskSidePaneMemoryState {
-  return {
-    ...DEFAULT_TASK_SIDE_PANE_MEMORY_STATE,
-    sidePaneState: createDefaultWorkspaceSidePaneState(),
-    isSidePaneCollapsed: false,
-  };
-}
-
 export function readTaskSidePaneMemoryState(key: string | null): TaskSidePaneMemoryState {
   if (!key) {
-    return createFreshTaskSidePaneMemoryState();
+    return DEFAULT_TASK_SIDE_PANE_MEMORY_STATE;
   }
 
   const state = taskSidePaneMemory.get(key);
   if (!state) {
-    return createFreshTaskSidePaneMemoryState();
+    return DEFAULT_TASK_SIDE_PANE_MEMORY_STATE;
   }
 
   const normalizedState = {
