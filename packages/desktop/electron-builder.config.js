@@ -78,7 +78,8 @@ const desktopIdentityEnv = {
   ZCODE_ENV: builtinProviderConfig.environment,
 };
 const desktopProductIdentity = resolveDesktopProductIdentity(desktopIdentityEnv);
-// 图标基础名与多尺寸目录跟随同一套身份判定：local 用反色图标，官方身份用原图标。
+// Icon base name and multi-size directories follow the same identity check:
+// local uses inverted icons, official identity uses the original icons.
 const desktopIconBase = resolveDesktopIconBaseName(desktopIdentityEnv);
 const desktopIconsDir = resolveDesktopIconsDirName(desktopIdentityEnv);
 const nativeSearchReleasePlan = resolveNativeSearchReleasePlan({
@@ -100,9 +101,10 @@ const runtimeModuleLookupRoots = [
 ];
 const desktopDistDir = process.env.ZCODE_DESKTOP_DIST_DIR || "dist";
 const DEFAULT_ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/";
-// `pnpm exec asar` 依赖 `.bin/asar`，但 @electron/asar 仅是 electron-builder 传递依赖时，
-// Linux CI（pnpm hoisted）往往解析不到该二进制，`asar list` 未运行即 exit 1。
-// 显式依赖 @electron/asar 并用 Node 直接执行 CLI，避免跨平台找不齐 shim。
+// `pnpm exec asar` needs `.bin/asar`, but when @electron/asar is only a transitive
+// electron-builder dep, Linux CI (pnpm hoisted) often cannot resolve the binary
+// and `asar list` exits 1 without running. Depend on @electron/asar explicitly
+// and run the CLI with Node directly so no platform misses the shim.
 const requireFromConfig = createRequire(import.meta.url);
 let nsisInstallSectionPatched = false;
 let nsisInstallSectionOriginalSource = null;
@@ -116,49 +118,68 @@ const asarCliPath = resolve(
 const REQUIRED_ASAR_RUNTIME_MODULES = [
   "module-details-from-path",
   "@opentelemetry/api-logs",
-  // Bugfix: telemetry 的 OTLP exporter 会在启动阶段加载 sdk-metrics。pnpm 开发态可从
-  // workspace 根目录解析，但 electron-builder 不会稳定复制这条 hoisted 依赖，导致安装包启动即崩溃。
-  // 将 sdk-metrics 作为闭包根注入，同时递归带齐它的 OpenTelemetry 运行时依赖。
+  // Bugfix: telemetry's OTLP exporter loads sdk-metrics at startup. Pnpm dev mode
+  // resolves it from the workspace root, but electron-builder does not reliably
+  // copy this hoisted dep, crashing the installer at launch. Inject sdk-metrics
+  // as a closure root and bring its OpenTelemetry runtime deps recursively.
   "@opentelemetry/sdk-metrics",
-  // OTLP proto 导出链闭包根：递归带齐 otlp-transformer/protobufjs 及其子依赖，
-  // 否则 hoisted 布局漏 protobufjs 时已安装应用启动即报 Cannot find module 'protobufjs/minimal'。
+  // OTLP proto export-chain closure root: bring otlp-transformer/protobufjs and
+  // their children recursively, otherwise a hoisted layout missing protobufjs
+  // crashes the installed app at startup with Cannot find module 'protobufjs/minimal'.
   "@opentelemetry/exporter-trace-otlp-proto",
   "@opentelemetry/exporter-metrics-otlp-proto",
   "pngjs",
-  // @zcode/services 的代理连通性探测会动态 require("undici") 取 ProxyAgent。
-  // tsup 虽然把 services 代码并进了主/host 产物，但不会把这个运行时 require 的包内联进去，
-  // electron-builder 产物又可能漏掉 hoisted 的 undici，最终 mac 安装包启动即报 Cannot find module "undici"。
-  // 这里把 undici 和其他兜底依赖一样强制注入 app.asar，避免用户在已安装应用里主进程直接崩溃。
+  // The proxy connectivity probe in @zcode/services dynamically requires("undici")
+  // for ProxyAgent. tsup merges services code into the main/host output but does
+  // not inline this runtime-required package, and electron-builder output may
+  // drop the hoisted undici, so the final mac installer crashes at startup with
+  // Cannot find module "undici". Force-inject undici into app.asar like the
+  // other fallback deps so users never get a main-process crash in the installed app.
   "undici",
-  // node-forge 一直只写在 bundle.mjs 的校验名单里，靠 electron-builder 自己打进 app.asar；
-  // 这与 yauzl 漏 pend 是同一类隐患——校验要求的模块必须有人负责补齐。node-forge 无子依赖，
-  // 已在产物里时 afterPack 扫描会跳过它，不改变现有打包结果。
+  // node-forge used to live only in bundle.mjs's verify list, relying on
+  // electron-builder to pack it into app.asar — the same hazard class as yauzl
+  // missing pend: a module the checks require must have someone responsible for
+  // supplying it. node-forge has no children; when already in the artifact the
+  // afterPack scan skips it, leaving existing packaging results unchanged.
   "node-forge",
-  // 2.7.0 起 services 新增反馈日志压缩链路并引入 yazl；2.6.0 没有这条启动期依赖，
-  // pnpm hoisted 布局下 yazl 可能进了 app.asar，但子依赖 buffer-crc32 没有稳定随包进入产物；
-  // 这里显式以 yazl 作为闭包根注入，让递归依赖收集把 ZIP 打包链路所需依赖一起补齐。
+  // Since 2.7.0 services added a feedback-log compression path using yazl; 2.6.0
+  // had no such startup dep. Under pnpm hoisting yazl may enter app.asar while
+  // child dep buffer-crc32 does not reliably ship; explicitly inject yazl as a
+  // closure root so recursive collection completes the ZIP chain's deps.
   "yazl",
-  // yauzl 成为 desktop/services 的直接生产依赖后，pnpm list --prod 会把顶层 yauzl 节点
-  // 去重成没有子依赖的空节点；electron-builder 的 pnpm collector 以先登记的空节点为准，
-  // 跳过后面带完整子树的那个，于是 app.asar 里有 yauzl 却没有它的运行时依赖 pend，
-  // 要到 bundle 校验阶段才报「缺少运行时依赖 pend」。这里以 yauzl 作为闭包根注入，
-  // 与 bundle.mjs 的校验名单保持一致，让递归依赖收集把 pend 一起补进产物。
+  // Once yauzl became a direct production dep of desktop/services, pnpm list --prod
+  // dedupes the top-level yauzl node into a childless empty node, and
+  // electron-builder's pnpm collector honors the first-registered empty node,
+  // skipping the later one with the full tree — leaving yauzl in app.asar
+  // without its runtime dep pend until bundle verification reports it. Inject
+  // yauzl as a closure root, matching bundle.mjs's verify list, so recursive
+  // collection brings pend into the artifact.
   "yauzl",
-  // 生产态里 ssh2 虽然被打进 app.asar，但它的依赖链偶发被 electron-builder 漏拷。
-  // 已出现线上报错 Cannot find module 'asn1'（Require stack: ssh2 keyParser）。
-  // 这里把 ssh2 关键依赖链一起注入，避免远程 SSH 连接在已安装应用里因缺包直接失败。
+  // In production ssh2 is packed into app.asar but electron-builder occasionally
+  // drops its dependency chain. Cannot find module 'asn1' (Require stack: ssh2
+  // keyParser) has happened in the wild. Inject the ssh2 key chain together so
+  // remote SSH connections in the installed app never fail on missing packages.
   "asn1",
   "bcrypt-pbkdf",
   "tweetnacl",
-  // electron-updater → builder-util-runtime → debug 运行时 require("ms")。
-  // pnpm hoisted 布局下 electron-builder 偶发漏拷这个叶子依赖；3.4.0(ci/cua-v0.3.17 打的)
-  // 已在线上触发安装包启动即报 Cannot find module 'ms'（Require stack: debug/src/common.js），
-  // 自动更新链路直接崩。ms 是叶子包，显式注入即可让 debug 在 app.asar 内稳定解析。
+  // electron-updater -> builder-util-runtime -> debug requires("ms") at runtime.
+  // Under pnpm hoisting electron-builder occasionally drops this leaf dep;
+  // 3.4.0 (built by ci/cua-v0.3.17) crashed installers at startup with Cannot
+  // find module 'ms' (Require stack: debug/src/common.js), taking down the
+  // auto-update path. ms is a leaf package; injecting it explicitly keeps debug
+  // resolving stably inside app.asar.
   "ms",
+  // manifestUpdateProvider imports builder-util-runtime (HttpError) directly.
+  // It is CommonJS with an internal require("events"), so it cannot be inlined
+  // into the ESM main/host bundle. tsup marks it external; inject it into
+  // app.asar as a closure root so debug/ms come along recursively.
+  "builder-util-runtime",
 ];
-// pacman 依赖必须使用 Arch 官方仓库中的包名。electron-builder 的历史默认集合包含
-// 已移除的 libappindicator-gtk3/http-parser，且缺少 Electron 实际需要的运行库；显式
-// 维护最小运行时闭包，避免 pacman -U 无法解析依赖或启动时才暴露缺库。
+// pacman deps must use Arch official repository package names. electron-builder's
+// historical default set contains the removed libappindicator-gtk3/http-parser
+// and lacks runtime libs Electron actually needs; maintain the minimal runtime
+// closure explicitly so pacman -U never fails to resolve or hides a missing lib
+// until startup.
 const PACMAN_RUNTIME_DEPENDENCIES = [
   "gtk3",
   "nss",
@@ -209,11 +230,14 @@ function resolveElectronDownloadMirror(env = process.env) {
 }
 
 const commandStdoutMaxBuffer = 64 * 1024 * 1024;
-// 产物后缀只标记后端环境（_TEST）；身份靠 productName 区分，生产后端的 Preview 包没有后缀。
+// The artifact suffix only marks the backend environment (_TEST); identity is
+// distinguished by productName, so production-backend Preview packages carry no suffix.
 const desktopArtifactEnvSuffix = resolveDesktopArtifactSuffix(process.env);
 
-// Preview 是内部签名测试包。CI 明确打开 macOS 签名时若没有身份，必须在生成未签名包前失败，
-// 避免“产物存在”被误认为已经走完和生产版相同的签名链路。
+// Preview is an internally signed test package. When CI explicitly enables macOS
+// signing but no identity exists, fail before producing an unsigned package so
+// that "artifact exists" is never mistaken for having passed the same signing
+// path as production.
 if (
   desktopProductIdentity.flavor === "preview" &&
   process.env.ZCODE_ENABLE_MAC_SIGN === "1" &&
@@ -240,7 +264,8 @@ const PACKAGING_PRUNE_PATTERNS = [
 ];
 
 function buildDesktopArtifactName(platformName, extension = "${ext}") {
-  // 测试环境产物必须和正式安装包文件名区分，避免上传、下载或人工验收时混用。
+  // Test-environment artifacts must differ in filename from official installers
+  // so uploads, downloads, and manual acceptance never mix them up.
   return `\${productName}-\${version}-${platformName}-\${arch}${desktopArtifactEnvSuffix}.${extension}`;
 }
 
@@ -255,8 +280,10 @@ function runAsarCommandAndReadStdout(args) {
   return runCommandAndReadStdout(process.execPath, [asarCliPath, ...args], {
     cwd: import.meta.dirname,
     env: process.env,
-    // app.asar 在当前桌面包体积较大，asar list 输出可能超过默认缓冲并触发 ENOBUFS。
-    // 这里显式放大缓冲，避免“为了判断是否需要注入”反而把打包流程误判失败。
+    // app.asar is large in the current desktop package; asar list output can
+    // exceed the default buffer and trigger ENOBUFS. Enlarge the buffer
+    // explicitly so the packaging flow is never failed by the check that
+    // decides whether injection is needed.
     maxBuffer: commandStdoutMaxBuffer,
     stdio: ["ignore", "pipe", "inherit"],
   });
@@ -317,9 +344,11 @@ function resolveMissingRuntimeModules(appAsarPath) {
   );
   const resolvableRuntimeModules = runtimeModules.filter((entry) => {
     if (!entry.sourceModulePath) {
-      // 不同平台/安装布局下，部分运行时依赖可能被裁剪或未落到本次打包工作区。
-      // 之前这里直接在 copy 阶段抛错会中断整个平台出包；改为记录告警并跳过该模块，
-      // 让 afterPack 只处理当前环境确实可解析的依赖，避免 CI 因单个可选依赖缺失全量失败。
+      // On some platforms/install layouts, some runtime deps may be pruned or never
+      // land in this packaging workspace. Throwing in the copy phase used to
+      // abort the whole platform package; now log a warning and skip the module
+      // so afterPack only handles deps that actually resolve here, instead of
+      // failing all of CI over one missing optional dep.
       console.warn(
         `[afterPack] runtime module not found, skip injection: ${entry.moduleName}; searched=${runtimeModuleLookupRoots
           .map((lookupRoot) => resolve(lookupRoot, "node_modules", entry.moduleName))
@@ -347,22 +376,26 @@ function resolveMissingRuntimeModules(appAsarPath) {
 async function injectHoistedRuntimeModulesIntoAsar(context) {
   const appAsarPath = resolveAppAsarPath(context);
   if (!existsSync(appAsarPath)) {
-    throw new Error(`打包产物缺少 app.asar: ${appAsarPath}`);
+    throw new Error(`Packaged artifact is missing app.asar: ${appAsarPath}`);
   }
 
   const missingRuntimeModules = runTimedSync("afterPack:scan-missing-runtime-modules", () =>
     resolveMissingRuntimeModules(appAsarPath),
   );
   if (missingRuntimeModules.length === 0) {
-    // 之前 afterPack 每次都完整 extract/pack app.asar，即使运行时依赖已经齐全也会重复重写。
-    // 这会把每次打包固定拉长十几秒到几十秒。先做缺失扫描，只有真的缺包才执行重写流程。
+    // afterPack used to fully extract/pack app.asar every time, rewriting it even
+    // when runtime deps were already complete — adding tens of seconds to every
+    // package run. Scan for missing modules first and only rewrite when something
+    // is actually absent.
     console.log("[afterPack] runtime modules already complete, skip app.asar rewrite");
     return;
   }
   console.log(`[afterPack] missing runtime modules count=${missingRuntimeModules.length}`);
 
-  // CI 会把 TMPDIR 指到项目内 .tmp，GitLab get_sources/clean 可能在脚本启动前清掉该目录。
-  // afterPack 里重写 app.asar 同样依赖 mkdtempSync，必须自己兜底创建父目录，避免后续签名阶段只看到 .app 消失。
+  // CI points TMPDIR at the in-project .tmp, which GitLab get_sources/clean may
+  // wipe before the script starts. Rewriting app.asar in afterPack also relies
+  // on mkdtempSync, so create the parent dir defensively — otherwise the later
+  // signing stage only sees the .app vanish.
   mkdirSync(tmpdir(), { recursive: true });
   const stagingDir = mkdtempSync(resolve(tmpdir(), "zcode-app-asar-"));
   try {
@@ -380,19 +413,23 @@ async function injectHoistedRuntimeModulesIntoAsar(context) {
 
         if (!sourceModulePath) {
           throw new Error(
-            `未找到运行时依赖 ${moduleName}，已搜索: ${runtimeModuleLookupRoots
+            `Runtime dependency ${moduleName} not found, searched: ${runtimeModuleLookupRoots
               .map((lookupRoot) => resolve(lookupRoot, "node_modules", moduleName))
               .join(", ")}`,
           );
         }
 
-        // pnpm hoisted 布局下，electron-builder 可能把主包打进 app.asar，
-        // 却漏掉它解析时还要去根 node_modules 找的运行时依赖。
-        // 之前 require-in-the-middle 漏过 module-details-from-path，这次 @fiahfy/icns 又漏了 pngjs，
-        // 最终都会在已安装应用里触发 Cannot find module 并让主进程启动直接崩溃。
-        // 这里按 package.json 递归补齐依赖闭包，避免每次只补一个缺失包、上线后再暴露下一个子依赖。
-        // 只靠 package.json 显式依赖、本包 node_modules 镜像、files include 都没让它稳定进 asar，
-        // 所以在 afterPack 阶段直接重写 app.asar，先把这些运行时包补进去，再交给后续签名和出包。
+        // Under pnpm hoisting, electron-builder may pack the main package into
+        // app.asar while dropping runtime deps it still resolves from the root
+        // node_modules. require-in-the-middle missed module-details-from-path
+        // before, and now @fiahfy/icns misses pngjs — both trigger Cannot find
+        // module in the installed app and crash the main process at startup.
+        // Complete the dependency closure recursively from package.json instead
+        // of patching one missing package at a time and discovering the next
+        // child dep after release. Explicit package.json deps, local node_modules
+        // mirrors, and files includes all failed to land it in asar reliably,
+        // so rewrite app.asar directly in afterPack: inject these runtime
+        // packages first, then hand off to signing and packaging.
         mkdirSync(dirname(targetModulePath), { recursive: true });
         rmSync(targetModulePath, { force: true, recursive: true });
         cpSync(sourceModulePath, targetModulePath, { recursive: true });
@@ -413,9 +450,11 @@ async function injectHoistedRuntimeModulesIntoAsar(context) {
 }
 
 async function stripPackagedSourcemapReferences(context) {
-  // electron-builder 的 files 规则能排除 .map 文件，但无法删除 JS/CSS 末尾
-  // 指向 sourcemap 的注释；afterPack 注入运行时依赖后也可能重新带入第三方 sourceMappingURL。
-  // 这里统一清理 app.asar 与 unpacked/extraResources，保证最终发布包不暴露 sourcemap 路径入口。
+  // electron-builder's files rules can exclude .map files but cannot strip the
+  // trailing sourcemap comments from JS/CSS; afterPack's runtime-dep injection
+  // may also reintroduce third-party sourceMappingURLs. Clean app.asar and
+  // unpacked/extraResources uniformly so release packages expose no sourcemap
+  // path entries.
   await cleanupPackagedSourcemaps({
     appAsarPath: resolveAppAsarPath(context),
     resourcesDir: resolvePackagedResourcesDir(context),
@@ -439,9 +478,11 @@ function assertPackagedNativeResourcePolicy(context) {
   );
   const violations = findDesktopNativePackageViolations(entries, targetPlatform.key);
   if (violations.length > 0) {
-    // supportedArchitectures 允许工作区准备多平台依赖，但安装包只能携带目标平台资源。
-    // 之前 Canvas 和 node-pty 的其他平台 native 被同时写进 asar/unpacked，包体被放大数百 MiB。
-    throw new Error(`桌面 native 资源边界校验失败:\n- ${violations.join("\n- ")}`);
+    // supportedArchitectures lets the workspace prepare multi-platform deps, but an
+    // installer may only carry target-platform resources. Canvas and node-pty
+    // natives for other platforms used to land in asar/unpacked together,
+    // inflating the package by hundreds of MiB.
+    throw new Error(`Desktop native resource boundary check failed:\n- ${violations.join("\n- ")}`);
   }
 }
 
@@ -451,14 +492,15 @@ function assertPackagedNodePtyPrebuild(context) {
     platformKey: targetPlatform.key,
   });
   if (!existsSync(targetBinaryPath))
-    throw new Error(`node-pty 预编译产物缺失: ${targetBinaryPath}`);
+    throw new Error(`node-pty prebuilt binary missing: ${targetBinaryPath}`);
 }
 
 /** @type {import("electron-builder").Configuration} */
 export default {
   appId: desktopProductIdentity.appId,
-  // Linux deb 打包（fpm）会校验 package metadata 中的 homepage、author.email、maintainer。
-  // CI 环境下若这些字段缺失会在产物阶段直接失败。这里统一在构建配置补齐，避免依赖外部注入。
+  // Linux deb packaging (fpm) validates homepage, author.email, and maintainer in
+  // the package metadata. Missing fields fail the artifact stage outright in CI,
+  // so complete them uniformly in the build config instead of relying on external injection.
   extraMetadata: {
     version: buildMetadata.appVersion,
     zcodeProductFlavor: desktopProductIdentity.flavor,
@@ -468,35 +510,42 @@ export default {
       email: "dev@zcode.z.ai",
     },
   },
-  // macOS 签名阶段会对 Electron Framework 下每个语言包逐个 codesign。
-  // 默认全量语言会产生大量 locale.pak 签名调用，显著拉长打包时长。
-  // 这里仅保留当前产品必需语言，减少签名文件数并缩短 CI 总耗时。
+  // The macOS signing stage codesigns every language pack under Electron
+  // Framework one by one. The default full language set produces a huge number
+  // of locale.pak signing calls and stretches packaging time. Keep only the
+  // languages the current product needs to cut signed files and total CI time.
   electronLanguages: ["en-US", "zh-CN"],
-  // pnpm workspace + semver range（如 ^41.0.3）下，electron-builder
-  // 有时无法从依赖树里稳定推导出 Electron 版本，导致 bundle 直接中断。
-  // 显式写死当前桌面端使用的 Electron 版本，避免打包阶段再做不可靠的猜测。
+  // Under pnpm workspace + semver ranges (e.g. ^41.0.3), electron-builder
+  // sometimes cannot derive the Electron version stably from the dependency
+  // tree and aborts the bundle. Pin the Electron version the desktop currently
+  // uses explicitly so packaging never guesses unreliably again.
   electronVersion: "41.0.3",
   electronDownload: {
-    // ELECTRON_MIRROR 是 @electron/get 的全局环境变量，会覆盖 dmg-builder 等
-    // generic artifact 自己传入的 mirrorOptions，导致 builder 辅助包被错误拼到 Electron runtime 镜像目录。
-    // 这里改用 electron-builder 的专用配置，只影响 Electron runtime zip 下载。
+    // ELECTRON_MIRROR is @electron/get's global env var; it overrides the
+    // mirrorOptions that generic artifacts like dmg-builder pass themselves,
+    // misrouting builder helper packages into the Electron runtime mirror
+    // directory. Use electron-builder's dedicated config instead so only the
+    // Electron runtime zip download is affected.
     mirror: resolveElectronDownloadMirror(),
   },
   productName: desktopProductIdentity.productName,
-  // 应用图标（不带扩展名，各平台自动拼接 .icns/.ico/.png）：local 身份用反色图标，
-  // 官方身份显式指向原图标，与之前默认约定解析到同一文件。
+  // App icon (no extension; each platform appends .icns/.ico/.png): the local
+  // identity uses inverted icons, while the official identity points explicitly
+  // at the original icons, resolving to the same files as the old default.
   icon: `build/${desktopIconBase}`,
   directories: {
-    // macOS arm64/x64 CI 可能共享同一个 checkout 并行打包。
-    // 输出根目录允许按架构隔离，避免一个 job 清理 dist 时删除另一个 job 正在签名的 .app。
+    // macOS arm64/x64 CI may share one checkout and package in parallel. The
+    // output root can be isolated per arch so one job cleaning dist never
+    // deletes the .app another job is signing.
     output: desktopDistDir,
     buildResources: "build",
   },
   files: [
     "out/**/*",
     "package.json",
-    // app.asar 会把桌面端运行时 node_modules 一并打进去，依赖包自带的 .map / README
-    // 默认也会原样进入安装包。这里统一在主包层做一次裁剪，只移除非运行时文件，LICENSE 继续保留。
+    // app.asar packs the desktop runtime node_modules along with it, and .map /
+    // README files shipped by deps would enter the installer verbatim. Prune
+    // once at the top package level: remove non-runtime files only, keep LICENSEs.
     ...PACKAGING_PRUNE_PATTERNS,
     ...createDesktopNativePackagePrunePatterns(targetPlatform.key),
     "!node_modules/@zcode/**",
@@ -504,8 +553,9 @@ export default {
     "!node_modules/react-dom/**",
   ],
   asarUnpack: [
-    // node-pty 的 target prebuild 还包含 spawn-helper / winpty-agent.exe 等辅助可执行文件，
-    // 整个目标目录必须 unpack；其他平台目录已由 files 规则裁剪。
+    // node-pty's target prebuild also contains helper executables like
+    // spawn-helper / winpty-agent.exe, so the whole target directory must stay
+    // unpacked; other-platform directories are already pruned by files rules.
     `node_modules/node-pty/prebuilds/${targetPlatform.key}/**`,
   ],
   beforePack: async (context) => {
@@ -528,8 +578,9 @@ export default {
     nsisInstallSectionPatched = true;
     nsisInstallSectionOriginalSource = patchResult.originalSource;
     if (patchResult.changed) {
-      // electron-builder 在当前进程内随后才会编译 NSIS；等整个构建进程退出后恢复 node_modules
-      // 中的上游模板，避免把一次打包的定制内容永久留在开发依赖里。
+      // electron-builder compiles NSIS later in the current process; restore the
+      // upstream template in node_modules after the whole build process exits
+      // so one packaging run's customizations never persist in dev dependencies.
       process.once("exit", () => {
         restoreNsisInstallSectionFileSync({
           filePath: nsisInstallSectionPath,
@@ -539,7 +590,8 @@ export default {
     }
   },
   afterExtract: async (context) => {
-    // 修复：macOS 重命名阶段会删除归档顶层许可证，必须在 afterExtract 保留目标平台原文。
+    // Fix: the macOS rename phase deletes the archive's top-level license, so the
+    // target platform's original text must be kept in afterExtract.
     const framework = context.packager.info.framework;
     const resources =
       context.electronPlatformName === "darwin"
@@ -579,68 +631,76 @@ export default {
     ...(targetPlatform.os === "darwin"
       ? [
           {
-            // CUA 权限浮窗的吸附数据源（CGWindowListCopyWindowInfo，不需要任何 TCC 权限）。
-            // 主进程按 process.resourcesPath 解析；缺失时 watcher fail-open，浮窗仍可用
-            // 只是不吸附，所以这里不做存在性断言。
+            // Snap data source for the CUA permission floater
+            // (CGWindowListCopyWindowInfo, needs no TCC permission). The main
+            // process resolves it via process.resourcesPath; when missing the
+            // watcher fails open and the floater still works, just without
+            // snapping — so no existence assertion here.
             from: "resources/macos-window-bounds/zcode-window-bounds",
             to: "macos-window-bounds/zcode-window-bounds",
           },
         ]
       : []),
     {
-      // 正式包不能依赖仓库目录读取社区、反馈等内置兜底配置。
-      // 显式放入 resources/config，与主进程的 process.resourcesPath 解析保持一致。
+      // Official packages cannot read built-in fallback configs (community,
+      // feedback, etc.) from the repo directory. Place them explicitly in
+      // resources/config, matching the main process's process.resourcesPath resolution.
       from: resolve(workspaceRoot, "config/default.json"),
       to: "config/default.json",
     },
     {
-      // Provider Registry 的 ZCode Built-in Config 是静态 Provider/Model 事实的唯一内置来源。
-      // 显式随包发布，避免正式 Host 回退到旧 Catalog/Preset hardcode。
+      // The Provider Registry's ZCode Built-in Config is the only built-in source of
+      // static Provider/Model facts. Ship it explicitly with the package so the
+      // official Host never falls back to old Catalog/Preset hardcodes.
       from: builtinProviderConfig.sourcePath,
       to: "config/provider/zcode-builtin.json",
     },
     {
-      // 应用图标：打包后放入 resources 目录，主进程通过 process.resourcesPath 加载
+      // App icons: placed in the resources directory after packaging; the main process loads them via process.resourcesPath.
       from: `build/${desktopIconBase}.png`,
       to: "icon.png",
     },
     ...(targetPlatform.os === "linux"
       ? [
           {
-            // AppImage 用户级 hicolor 图标安装使用真实 512x512 资源，避免目录标称尺寸和 PNG IHDR 不一致。
+            // AppImage user-level hicolor icon install uses the real 512x512 asset so
+            // the directory's nominal size never disagrees with the PNG IHDR.
             from: `build/${desktopIconsDir}/512x512.png`,
             to: "icon_512x512.png",
           },
         ]
       : []),
     {
-      // Windows 独立图标：开发态和打包态都统一走同一套任务栏/窗口图标资源。
+      // Standalone Windows icons: dev and packaged modes share the same taskbar/window icon resources.
       from: `build/${desktopIconBase}_windows.png`,
       to: "icon_windows.png",
     },
     ...(targetPlatform.os === "win32"
       ? [
           {
-            // Windows 托盘图标：Tray 在打包态只能稳定读取 resources 下的独立资源。
-            // 这里不复用窗口 PNG，避免通知区域在高 DPI 下退化成模糊缩放图。
+            // Windows tray icon: in packaged mode Tray can only stably read
+            // standalone resources under resources. Do not reuse the window PNG
+            // here, or the notification area degrades into a blurry upscale at high DPI.
             from: `build/${desktopIconBase}.ico`,
             to: "tray_icon.ico",
           },
         ]
       : []),
     {
-      // agent 运行时资产，打包到 resources/glm。
-      // 桌面端内置的是 agent 的 JS bundle（glm/zcode.cjs，由 prepare:agent-bundle 生成），
-      // Host 进程用 app 自带的 Electron Node runtime（ELECTRON_RUN_AS_NODE）执行 `zcode.cjs app-server --stdio`，
-      // 不再随包内置独立 Node 二进制。远端 SSH/WSL 仍走原生二进制（无 Electron）。
+      // Agent runtime assets, packaged into resources/glm. The desktop embeds the
+      // agent's JS bundle (glm/zcode.cjs, generated by prepare:agent-bundle); the
+      // Host process runs `zcode.cjs app-server --stdio` with the app's own
+      // Electron Node runtime (ELECTRON_RUN_AS_NODE) instead of shipping a
+      // standalone Node binary. Remote SSH/WSL still uses native binaries (no Electron).
       from: `bundled-agents/${targetPlatform.key}/glm`,
       to: "glm",
       filter: ["**/*", "!**/*.map"],
     },
     {
-      // agent shell 之前完全依赖宿主系统 PATH，GUI 启动时经常拿不到用户自己装的 rg。
-      // 这里把 ripgrep 作为桌面端内置 runtime tool 打进 resources/tools，
-      // 后续 host/server 把该目录追加到 PATH；用户版本优先，缺失时再由随包 rg 兜底。
+      // The agent shell used to rely entirely on the host system PATH, so GUI
+      // launches often missed the user's own rg. Ship ripgrep as a built-in
+      // desktop runtime tool in resources/tools; host/server append the directory
+      // to PATH later with the user's version first and the bundled rg as fallback.
       from: `bundled-tools/${targetPlatform.key}/ripgrep`,
       to: "tools/ripgrep",
       filter: ["**/*"],
@@ -651,14 +711,19 @@ export default {
       filter: ["**/*"],
     })),
   ],
-  // postinstall 会先优先复用 node-pty 自带的 Windows 预编译产物，其他平台再按需 electron-rebuild。
-  // 打包阶段统一复用安装时准备好的原生文件，避免 electron-builder 再触发一轮不受控的本地编译。
+  // postinstall prefers reusing node-pty's bundled Windows prebuilds and only
+  // electron-rebuilds other platforms on demand. Packaging uniformly reuses the
+  // native files prepared at install time so electron-builder never triggers
+  // another uncontrolled round of local compilation.
   npmRebuild: false,
-  // OAuth deep link 协议注册（macOS 打包后需要 Info.plist 中声明 CFBundleURLTypes）
+  // OAuth deep link protocol registration (macOS packages must declare CFBundleURLTypes in Info.plist).
   protocols: [
     {
-      // 协议处理器的展示名之前使用小写 scheme，打包产物里的协议描述无法体现产品名。
-      // 展示名跟随安装包身份；local 身份使用独立 zcode-local scheme，避免与官方安装抢默认 handler。
+      // The protocol handler's display name used to be the lowercase scheme, so the
+      // packaged protocol description never showed the product name. The display
+      // name now follows the installer identity; the local identity uses a
+      // dedicated zcode-local scheme so it never fights the official install
+      // for the default handler.
       name: desktopProductIdentity.productName,
       schemes: [desktopProductIdentity.flavor === "local" ? "zcode-local" : "zcode"],
     },
@@ -670,27 +735,36 @@ export default {
     extendInfo: {
       NSAppleEventsUsageDescription: `${desktopProductIdentity.productName} needs Apple Events access to coordinate local automation workflows with user-approved desktop apps.`,
     },
-    // 预签名脚本走的是原生 codesign，要求完整的 "Developer ID Application: ..." 身份串；
-    // 但 electron-builder 的 mac.identity 在 26.x 下会拒绝带此前缀的名字。
-    // 这里仅对 electron-builder 侧做前缀归一化，避免本地预签名和最终 .app 签名互相打架。
-    // z-code 之前只有本地未签名打包配置，CI 即使注入了证书变量，
-    // electron-builder 也不会自动切到 hardened runtime / entitlement 这套发布参数。
-    // 这里显式收拢到环境开关，保证本地开发不被签名配置绑死，CI 发布时再按需打开。
+    // The pre-sign script runs native codesign and needs the full "Developer ID
+    // Application: ..." identity string, but electron-builder's mac.identity on
+    // 26.x rejects names with that prefix. Normalize the prefix on the
+    // electron-builder side only so local pre-signing and final .app signing
+    // never fight each other.
+    // z-code previously only had local unsigned packaging config: even with CI
+    // cert variables injected, electron-builder never switched to the hardened
+    // runtime / entitlement release parameters on its own. Gather them behind
+    // explicit env switches so local dev is never pinned by signing config and
+    // CI release turns them on as needed.
     identity: shouldEnableMacSigning ? macSigningIdentity : null,
-    // macOS 产物采用“build 阶段签名 + 独立公证阶段”的两段式流水线。
-    // 如果这里不显式关闭 electron-builder 内置 notarize，它会在 build 阶段读取 Apple 凭据后直接尝试公证，
-    // 并强制要求 APPLE_APP_SPECIFIC_PASSWORD，导致 build 还没产出 DMG 就提前失败。
+    // macOS artifacts use a two-stage pipeline: sign at build time, notarize in a
+    // standalone stage. Without explicitly disabling electron-builder's built-in
+    // notarize here, it would read Apple credentials at build time and attempt
+    // notarization immediately, hard-requiring APPLE_APP_SPECIFIC_PASSWORD and
+    // failing before any DMG is produced.
     notarize: false,
     hardenedRuntime: shouldEnableMacSigning,
     gatekeeperAssess: false,
     entitlements: "build/entitlements.mac.plist",
     entitlementsInherit: "build/entitlements.mac.inherit.plist",
-    // runtime 可执行文件已在打包前的独立预签名阶段完成签名，
-    // electron-builder 在签主 app 时若继续深度扫描这些目录，会显著拉长 macOS codesign 时长。
-    // 这里按“任意前缀 + Contents/Resources”匹配绝对路径，避免 ^Contents/... 在 CI 中无法命中。
-    // 命中后可跳过已预签名目录的重复签名/遍历，同时保留主 app 与框架签名。
-    // CUA Helper 在独立 job 中已完成 Developer ID 签名和 notarization staple；
-    // electron-builder 若再次签名嵌套 Helper 会改变 CDHash，使最终用户包中的 staple 失效。
+    // Runtime executables were already signed in the standalone pre-sign stage
+    // before packaging; if electron-builder deep-scans these directories again
+    // while signing the main app, macOS codesign time balloons. Match absolute
+    // paths by "any prefix + Contents/Resources" so ^Contents/... patterns still
+    // hit in CI. Matches skip re-signing/retraversing pre-signed directories
+    // while keeping main-app and framework signatures. The CUA Helper already
+    // completed Developer ID signing and notarization stapling in its own job;
+    // re-signing the nested Helper would change its CDHash and invalidate the
+    // staple in the final user package.
     signIgnore: [
       "[/\\\\]Contents[/\\\\]Resources[/\\\\]glm([/\\\\]|$)",
       "[/\\\\]Contents[/\\\\]Resources[/\\\\]tools([/\\\\]|$)",
@@ -703,50 +777,59 @@ export default {
   linux: {
     target: ["AppImage", "deb", "rpm", "pacman"],
     artifactName: buildDesktopArtifactName("linux"),
-    // desktop 包名是 scoped package（@zcode/desktop），electron-builder 默认会把
-    // Linux executable/Icon 推成 @zcodedesktop。部分桌面环境无法按这个 icon name 命中
-    // hicolor 图标，最终回退成系统齿轮。这里固定成稳定的小写名称，让 Icon=zcode
-    // 与 /usr/share/icons/hicolor/*/apps/zcode.png 保持一致。
+    // The desktop package name is scoped (@zcode/desktop), so electron-builder
+    // would default the Linux executable/Icon to @zcodedesktop. Some desktop
+    // environments cannot match a hicolor icon by that name and fall back to the
+    // system gear. Pin a stable lowercase name so Icon=zcode matches
+    // /usr/share/icons/hicolor/*/apps/zcode.png.
     executableName: desktopProductIdentity.linuxExecutableName,
     category: "Development",
     maintainer: "ZCode <dev@zcode.z.ai>",
   },
   deb: {
-    // 生产版与 Preview 必须是两个 dpkg package；只改可执行名仍会让安装器把另一版本当成升级替换。
+    // Production and Preview must be two dpkg packages; renaming only the
+    // executable still lets the installer treat the other version as an upgrade replacement.
     packageName: desktopProductIdentity.linuxPackageName,
   },
   pacman: {
-    // 与 deb/rpm 保持相同的 flavor 隔离，避免 Preview/Production 被 pacman 当作同一包覆盖。
+    // Same flavor isolation as deb/rpm so pacman never treats Preview/Production as one package overwriting the other.
     packageName: desktopProductIdentity.linuxPackageName,
-    // 显式列出 Arch 官方仓库可解析的 Electron 运行时依赖，替换 electron-builder
-    // 陈旧默认集合，避免安装阶段因已移除包名直接失败。
+    // Explicitly list Arch-official-repo resolvable Electron runtime deps to replace
+    // electron-builder's stale defaults, which fail installs on removed package names.
     depends: PACMAN_RUNTIME_DEPENDENCIES,
-    // Electron Builder 默认把 pacman target 命名为 .pacman；Arch 原生包的标准扩展名是 .pkg.tar.zst。
+    // Electron Builder names the pacman target .pacman by default; the Arch native standard extension is .pkg.tar.zst.
     artifactName: buildDesktopArtifactName("linux", "pkg.tar.zst"),
   },
   rpm: {
-    // 与 deb 同一约束：生产版与 Preview 必须是两个独立 rpm 包，否则 dnf 会把另一 flavor 当成升级替换。
-    // rpm 面向 RHEL 8+（glibc 2.28）分发；整包 glibc 下限由 node-pty prebuild 与 bfs/ugrep 抬到 2.28，
-    // Electron 41 主二进制只引用到 2.25，不会更高。fpm 产 rpm 需要构建机提供 rpmbuild 与 xz。
+    // Same constraint as deb: production and Preview must be two independent rpm
+    // packages or dnf treats the other flavor as an upgrade replacement. rpms
+    // target RHEL 8+ (glibc 2.28); the package-wide glibc floor is already at
+    // 2.28 via the node-pty prebuild and bfs/ugrep, while the Electron 41 main
+    // binary only references up to 2.25. fpm needs rpmbuild and xz on the build host.
     packageName: desktopProductIdentity.linuxPackageName,
-    // electron-builder 的 rpm 默认 Requires（gtk3/nss/libXtst 等）不包含 Electron ELF 实际
-    // DT_NEEDED 的 mesa-libgbm 与 alsa-lib；rockylinux:8 最小化容器实测装完后启动报
-    // libgbm.so.1 缺失。这里用 fpm 追加 -d（在默认 Requires 之后累积），不能用 depends——
-    // depends 会整组替换默认 Requires 集。
+    // electron-builder's rpm default Requires (gtk3/nss/libXtst etc.) omit the
+    // mesa-libgbm and alsa-lib that the Electron ELF actually DT_NEEDEDs; a
+    // minimal rockylinux:8 container boots to a missing libgbm.so.1 after
+    // install. Append -d via fpm (accumulating after the default Requires) —
+    // never depends, which would replace the whole default Requires set.
     fpm: ["-d", "mesa-libgbm", "-d", "alsa-lib"],
   },
   dmg: {
-    // 当前安装包携带的运行时资源（尤其 agent node_modules）体积已超过默认 DMG 估算值。
-    // 之前依赖自动容量时，生成的 DMG 挂载卷只有约 1.9Gi，复制 .app 过程中会因为空间耗尽
-    // 丢失 Electron Framework 主二进制，安装后启动直接报 DYLD Library missing。
-    // 显式放大 DMG 容量，避免拷贝截断导致的“Framework 目录存在但核心文件缺失”。
+    // The runtime resources carried by current installers (especially agent
+    // node_modules) exceed the default DMG size estimate. With automatic sizing
+    // the mounted DMG volume was only ~1.9Gi, and copying the .app ran out of
+    // space and lost the Electron Framework main binary, so launches after
+    // install failed with DYLD Library missing. Enlarge the DMG explicitly so
+    // truncated copies never produce "Framework dir exists but core files missing".
     size: "3200m",
-    // 使用自定义安装背景图。
+    // Use a custom installer background image.
     background: "build/dmg_background.png",
-    // 安装盘图标统一使用安装专用素材，避免复用应用图标导致安装识别度不足。
+    // Installer volume icons uniformly use installer-specific artwork instead of
+    // reusing the app icon, which would hurt installer recognizability.
     icon: `build/${desktopIconBase}_installer.icns`,
     contents: [
-      // 实验性调整：为隐藏资源文件显式指定图标坐标，尽量把它们移到角落区域。
+      // Experimental tweak: pin explicit icon coordinates for hidden resource
+      // files to push them toward the corners.
       { x: 640, y: 56, type: "file", path: ".background.tiff" },
       { x: 640, y: 56, type: "file", path: ".VolumeIcon.icns" },
       { x: 130, y: 220 },
@@ -756,7 +839,7 @@ export default {
   nsis: {
     oneClick: false,
     allowToChangeInstallationDirectory: true,
-    // Windows 安装流程使用独立安装图标，和应用运行时图标解耦。
+    // The Windows install flow uses standalone installer icons, decoupled from the app runtime icons.
     installerIcon: `build/${desktopIconBase}_installer.ico`,
     uninstallerIcon: `build/${desktopIconBase}_installer.ico`,
     installerHeaderIcon: `build/${desktopIconBase}_installer.ico`,
@@ -764,12 +847,15 @@ export default {
   detectUpdateChannel: false,
   publish: {
     provider: "generic",
-    // 当前 OSS/CDN 对多 Range 请求返回 206，但 Content-Type 仍是 application/x-msdownload，
-    // electron-updater 会因缺少 multipart/byteranges 直接回退整包下载。关闭 multiple range 后仍走差分，
-    // 只是按单 Range 顺序拉取差异块，避免 Windows 用户更新时从约 15MB 退化成 300MB+ 全量包。
+    // Current OSS/CDN answers multi-Range requests with 206 but keeps Content-Type
+    // application/x-msdownload, so electron-updater falls back to a full download
+    // for the missing multipart/byteranges. With multiple ranges off, updates
+    // still go differential — just pulling diff blocks in single-Range order —
+    // so Windows users never degrade from ~15MB to a 300MB+ full package.
     useMultipleRangeRequest: false,
-    // 新客户端运行时使用服务端 manifest provider；这里仅保留 electron-builder 必需的
-    // generic publish 占位，避免打包产物继续携带可配置的旧 stable feed。
+    // New clients use the server-side manifest provider at runtime; keep only the
+    // electron-builder-required generic publish placeholder here so packaged
+    // output stops carrying the configurable old stable feed.
     url: "http://localhost:8081",
   },
 };
