@@ -35,6 +35,7 @@ import {
   type V4ComposerDraft,
 } from "@/v4/composer/composerDraftStore.js";
 import { resolveAppFollowupMode } from "@/v4/composer/followupModeSettings.js";
+import { subscribeSessionRouteRequests } from "@/harness-router/sessionRouteRequests.js";
 import { logger } from "@/logger.js";
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
 
@@ -428,6 +429,28 @@ export function useDraftConfigControl(params: {
     },
     [modelSelectionView, updateDraftConfig, workspaceIdentity, workspacePath],
   );
+
+  // External route requests (Harness Router tab) reuse the exact composer-select
+  // path so retargeting the open session behaves like picking the model in the
+  // toolbar. Scope matching keeps split panes and side-chat sessions isolated.
+  useEffect(() => {
+    return subscribeSessionRouteRequests((request) => {
+      if (request.scopeId !== scopeId) {
+        return;
+      }
+      const selection = modelSelectionView
+        ? (completeNewModelSelection(modelSelectionView, request.selection) ??
+          request.selection)
+        : request.selection;
+      logger.debug("[v4-draft-config] external session route", {
+        providerId: selection.providerId,
+        modelId: selection.modelId,
+        scopeId,
+        workspacePath,
+      });
+      updateDraftConfig((current) => applyDraftModelSelection(current, selection));
+    });
+  }, [scopeId, modelSelectionView, updateDraftConfig, workspacePath]);
 
   const handleDraftSelectThought = useCallback(
     (thought: string) => {

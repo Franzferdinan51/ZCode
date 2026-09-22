@@ -317,6 +317,7 @@ export function AnimatedSidePanePanel({
   onOpenDeveloperTools,
   onOpenHarnessRouter,
   onOpenTerminalTab,
+  onOpenTerminalTabWithCommand,
   onOpenReviewTab,
   onOpenSelectionSideConversation,
   onRevealGitFileInTree,
@@ -383,6 +384,7 @@ export function AnimatedSidePanePanel({
   onOpenDeveloperTools: () => void;
   onOpenHarnessRouter: () => void;
   onOpenTerminalTab: () => void;
+  onOpenTerminalTabWithCommand: (params: { command: string; title: string }) => void;
   onOpenReviewTab: () => void;
   onOpenSelectionSideConversation: () => void;
   onRevealGitFileInTree?: (path: string) => void;
@@ -1281,6 +1283,8 @@ export function AnimatedSidePanePanel({
                               workspacePath={workspaceAbsPath}
                               workspaceIdentity={workspaceIdentity}
                               enabled={isVisible && tab.id === visibleActiveTabId}
+                              activeTaskId={activeTaskId}
+                              onOpenTerminalTabWithCommand={onOpenTerminalTabWithCommand}
                             />
                           </ServiceProvider>
                         ) : tab.type === "terminal" ? (
@@ -1289,6 +1293,7 @@ export function AnimatedSidePanePanel({
                             sessionId={tab.id}
                             workspaceKey={workspaceKey}
                             cwd={tab.cwd ?? workspaceAbsPath}
+                            initialCommand={tab.initialCommand}
                             isVisible={isVisible && tab.id === visibleActiveTabId}
                             isWindowsDesktop={isWindowsDesktop}
                             onOpenBrowserUrl={onOpenBrowserUrl}

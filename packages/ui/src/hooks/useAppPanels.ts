@@ -821,6 +821,36 @@ export function useAppPanels(options: {
     workspaceRemoteSessionId,
   ]);
 
+  const handleOpenTerminalTabWithCommand = useCallback(
+    (params: { command: string; title: string }) => {
+      if (isOfficeMode) return;
+      const command = params.command.trim();
+      if (!command) {
+        return;
+      }
+      revealSidePaneForCurrentOwner();
+      commitOpenedSidePaneState((current) => {
+        const next = openTerminalSidePane(current, {
+          title: params.title,
+          cwd: workspaceAbsPath,
+          remoteSessionId: workspaceRemoteSessionId,
+          initialCommand: command,
+        });
+        logger.info(
+          `[App] 新建右侧终端 tab=${params.title} workspace=${workspaceAbsPath} tabs=${next.tabs.length}`,
+        );
+        return next;
+      });
+    },
+    [
+      isOfficeMode,
+      commitOpenedSidePaneState,
+      revealSidePaneForCurrentOwner,
+      workspaceAbsPath,
+      workspaceRemoteSessionId,
+    ],
+  );
+
   const handleOpenModelTrajectory = useCallback(
     (params: { taskId: string; title?: string | null }) => {
       if (!params.taskId) {
@@ -1601,6 +1631,7 @@ export function useAppPanels(options: {
     handleOpenDeveloperTools,
     handleOpenHarnessRouter,
     handleOpenTerminalTab,
+    handleOpenTerminalTabWithCommand,
     handleOpenModelTrajectory,
     handleOpenSubagentSession,
     handleOpenBackgroundBash,

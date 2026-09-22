@@ -1,32 +1,75 @@
-import { useCallback, useState } from "react";
-import { CheckIcon, Loader2Icon, RotateCcwIcon, RouteIcon } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  CheckIcon,
+  Loader2Icon,
+  RotateCcwIcon,
+  RouteIcon,
+  StarIcon,
+  TerminalIcon,
+} from "lucide-react";
 import type { ModelSelection } from "@zcode/shared";
 import { Button } from "@/components/ui/button.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useServices } from "@/hooks/useServices.js";
 import { useModelSelectionServiceView } from "@/hooks/useModelSelectionView.js";
+import { V4_DRAFT_SCOPE_ROOT } from "@/v4/composer/composerDraftStore.js";
 import { logger } from "@/logger.js";
 import { cn } from "@/components/lib/utils.js";
 import {
   buildHarnessProviderGroups,
   describeRouteTarget,
 } from "@/harness-router/harnessRouterModel.js";
+import {
+  EXTERNAL_HARNESSES,
+  externalHarnessBinaries,
+  resolveExternalHarnessStatus,
+} from "@/harness-router/externalHarnesses.js";
+import { requestSessionRoute } from "@/harness-router/sessionRouteRequests.js";
 
 interface HarnessRouterSidePaneProps {
   workspacePath: string;
   workspaceIdentity?: string;
   enabled?: boolean;
+  /** Open session in the main chat area (null = draft scope). v4: sessionId === taskId. */
+  activeTaskId?: string | null;
+  onOpenTerminalTabWithCommand?: (params: { command: string; title: string }) => void;
 }
 
 export function HarnessRouterSidePane({
   workspacePath,
   enabled = true,
+  activeTaskId = null,
+  onOpenTerminalTabWithCommand,
 }: HarnessRouterSidePaneProps) {
   const { intl } = useZCodeIntl();
-  const { modelSelectionService } = useServices();
+  const { modelSelectionService, systemService } = useServices();
   const { state, reload } = useModelSelectionServiceView(modelSelectionService ?? null, enabled);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
+  const [resolvedCommands, setResolvedCommands] = useState<Record<string, string | null> | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!enabled || !systemService) {
+      return;
+    }
+    let cancelled = false;
+    void systemService
+      .resolveCommands({ commands: externalHarnessBinaries() })
+      .then((resolved) => {
+        if (!cancelled) {
+          setResolvedCommands(resolved);
+        }
+      })
+      .catch((error) => {
+        logger.error("[harness-router] resolve external harness commands failed", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, systemService]);
 
   const saveRoute = useCallback(
     async (selection: ModelSelection | undefined) => {
@@ -36,6 +79,7 @@ export function HarnessRouterSidePane({
       const key = describeRouteTarget(selection) ?? "automatic";
       setPendingKey(key);
       setSaveError(null);
+      setSessionNotice(null);
       try {
         await modelSelectionService.saveDefaultModelSelection(selection);
         logger.info("[harness-router] default route saved", {
@@ -54,6 +98,49 @@ export function HarnessRouterSidePane({
       }
     },
     [intl, modelSelectionService, workspacePath],
+  );
+
+  const routeSession = useCallback(
+    (selection: ModelSelection) => {
+      const key = describeRouteTarget(selection) ?? "unknown";
+      setSaveError(null);
+      const handled = requestSessionRoute({
+        scopeId: activeTaskId ?? V4_DRAFT_SCOPE_ROOT,
+        selection,
+      });
+      if (handled) {
+        logger.info("[harness-router] open session routed", { route: key, workspacePath });
+        setSessionNotice(intl.formatMessage({ id: "harnessRouter.sessionRouted" }, { route: key }));
+      } else {
+        setSessionNotice(intl.formatMessage({ id: "harnessRouter.sessionNotOpen" }));
+      }
+    },
+    [activeTaskId, intl, workspacePath],
+  );
+
+  const launchExternalHarness = useCallback(
+    (harnessId: string) => {
+      if (!onOpenTerminalTabWithCommand) {
+        return;
+      }
+      const harness = EXTERNAL_HARNESSES.find((entry) => entry.id === harnessId);
+      if (!harness || harness.builtin) {
+        return;
+      }
+      setSaveError(null);
+      onOpenTerminalTabWithCommand({
+        command: harness.launchCommand,
+        title: harness.name,
+      });
+      logger.info("[harness-router] external harness launched", {
+        harness: harness.id,
+        workspacePath,
+      });
+      setSessionNotice(
+        intl.formatMessage({ id: "harnessRouter.externalLaunched" }, { harness: harness.name }),
+      );
+    },
+    [intl, onOpenTerminalTabWithCommand, workspacePath],
   );
 
   if (state.status === "loading") {
@@ -111,6 +198,9 @@ export function HarnessRouterSidePane({
             },
           )}
         </p>
+        {sessionNotice && (
+          <p className="pt-1 text-ui-xs text-foreground">{sessionNotice}</p>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
@@ -155,30 +245,31 @@ export function HarnessRouterSidePane({
                   const key = `${model.providerId}/${model.modelId}`;
                   const pending = pendingKey === key;
                   return (
-                    <li key={model.modelId}>
+                    <li
+                      key={model.modelId}
+                      className={cn(
+                        "flex items-center gap-1 rounded-md border border-border",
+                        model.isRouted && "border-primary",
+                      )}
+                    >
                       <button
                         type="button"
                         disabled={!model.enabled || pendingKey !== null}
                         onClick={() =>
-                          void saveRoute({ providerId: model.providerId, modelId: model.modelId })
+                          routeSession({ providerId: model.providerId, modelId: model.modelId })
                         }
-                        title={key}
+                        title={`${intl.formatMessage({ id: "harnessRouter.routeSession" })}: ${key}`}
                         className={cn(
-                          "flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-left",
-                          "border-border hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60",
-                          model.isRouted && "border-primary",
+                          "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-1.5 text-left",
+                          "hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60",
                         )}
                       >
-                        {pending ? (
-                          <Loader2Icon className="size-3.5 animate-spin" />
-                        ) : (
-                          <span
-                            className={cn(
-                              "size-1.5 shrink-0 rounded-full",
-                              model.isRouted ? "bg-primary" : "bg-border",
-                            )}
-                          />
-                        )}
+                        <span
+                          className={cn(
+                            "size-1.5 shrink-0 rounded-full",
+                            model.isRouted ? "bg-primary" : "bg-border",
+                          )}
+                        />
                         <span className="min-w-0 flex-1 truncate font-mono text-ui-xs text-foreground">
                           {model.modelId}
                         </span>
@@ -191,6 +282,27 @@ export function HarnessRouterSidePane({
                           <CheckIcon className="size-3.5 shrink-0 text-primary" />
                         )}
                       </button>
+                      <button
+                        type="button"
+                        disabled={!model.enabled || pendingKey !== null}
+                        onClick={() =>
+                          void saveRoute({ providerId: model.providerId, modelId: model.modelId })
+                        }
+                        title={intl.formatMessage({ id: "harnessRouter.setDefault" })}
+                        aria-label={`${intl.formatMessage({ id: "harnessRouter.setDefault" })}: ${key}`}
+                        className="shrink-0 rounded-md p-1.5 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {pending ? (
+                          <Loader2Icon className="size-3.5 animate-spin" />
+                        ) : (
+                          <StarIcon
+                            className={cn(
+                              "size-3.5",
+                              model.isRouted ? "fill-current text-primary" : "text-foreground-subtle",
+                            )}
+                          />
+                        )}
+                      </button>
                     </li>
                   );
                 })}
@@ -198,6 +310,75 @@ export function HarnessRouterSidePane({
             </section>
           ))
         )}
+
+        <section className="pt-4">
+          <h3 className="px-1 pb-1 text-ui-xs font-medium text-foreground-subtle">
+            {intl.formatMessage({ id: "harnessRouter.externalTitle" })}
+          </h3>
+          <p className="px-1 pb-1.5 text-ui-xs text-foreground-subtle">
+            {intl.formatMessage({ id: "harnessRouter.externalHint" })}
+          </p>
+          <ul className="flex flex-col gap-1">
+            {EXTERNAL_HARNESSES.map((harness) => {
+              const status = resolveExternalHarnessStatus(
+                harness,
+                resolvedCommands?.[harness.binary],
+                resolvedCommands !== null,
+              );
+              const launchable =
+                status === "installed" && Boolean(onOpenTerminalTabWithCommand);
+              const statusLabel =
+                status === "builtin"
+                  ? intl.formatMessage({ id: "harnessRouter.externalBuiltin" })
+                  : status === "installed"
+                    ? intl.formatMessage({ id: "harnessRouter.externalInstalled" })
+                    : status === "missing"
+                      ? intl.formatMessage({ id: "harnessRouter.externalMissing" })
+                      : intl.formatMessage({ id: "harnessRouter.externalUnknown" });
+              return (
+                <li
+                  key={harness.id}
+                  className="flex items-center gap-1 rounded-md border border-border"
+                >
+                  <button
+                    type="button"
+                    disabled={!launchable}
+                    onClick={() => launchExternalHarness(harness.id)}
+                    title={`${intl.formatMessage({ id: "harnessRouter.externalLaunch" })}: ${harness.launchCommand}`}
+                    className={cn(
+                      "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-1.5 text-left",
+                      "hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "size-1.5 shrink-0 rounded-full",
+                        status === "installed" || status === "builtin"
+                          ? "bg-primary"
+                          : "bg-border",
+                      )}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-ui-xs font-medium text-foreground">
+                        {harness.name}
+                      </span>
+                      <span className="block truncate text-ui-xs text-foreground-subtle">
+                        {harness.hint}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-ui-xs text-foreground-subtle">
+                      {statusLabel}
+                    </span>
+                    {launchable && <TerminalIcon className="size-3.5 shrink-0 text-primary" />}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="px-1 pt-2 text-ui-xs text-foreground-subtle">
+            {intl.formatMessage({ id: "harnessRouter.apiHint" })}
+          </p>
+        </section>
 
         {saveError && (
           <p className="px-1 pt-3 text-ui-xs text-destructive">{saveError}</p>

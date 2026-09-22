@@ -102,6 +102,8 @@ export interface TerminalSidePaneTab {
   title: string;
   cwd?: string;
   remoteSessionId?: string | null;
+  /** Command typed once into the shell after the PTY is ready (harness launch). */
+  initialCommand?: string;
 }
 
 /** browser-use 受控浏览器视图（renderer `<webview>` + main CDP）。 */
@@ -693,6 +695,7 @@ function createTerminalSidePaneTab(options: {
   title: string;
   cwd?: string;
   remoteSessionId?: string | null;
+  initialCommand?: string;
 }): TerminalSidePaneTab {
   return {
     id: `terminal:${createUuid()}`,
@@ -701,6 +704,7 @@ function createTerminalSidePaneTab(options: {
     title: options.title,
     ...(options.cwd ? { cwd: options.cwd } : {}),
     ...(options.remoteSessionId ? { remoteSessionId: options.remoteSessionId } : {}),
+    ...(options.initialCommand ? { initialCommand: options.initialCommand } : {}),
   };
 }
 
@@ -1623,7 +1627,7 @@ export function toggleHarnessRouterSidePane(
 
 export function openTerminalSidePane(
   current: WorkspaceSidePaneState | null,
-  options: { title: string; cwd?: string; remoteSessionId?: string | null },
+  options: { title: string; cwd?: string; remoteSessionId?: string | null; initialCommand?: string },
 ): WorkspaceSidePaneState {
   return activateSidePaneTab(current, createTerminalSidePaneTab(options));
 }

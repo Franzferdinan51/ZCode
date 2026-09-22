@@ -235,6 +235,7 @@ export interface WorkspaceShellLayoutProps extends Omit<AppProps, "baseFeedbackS
   handleOpenDeveloperTools: () => void;
   handleOpenHarnessRouter: () => void;
   handleOpenTerminalTab: () => void;
+  handleOpenTerminalTabWithCommand: (params: { command: string; title: string }) => void;
   handleToggleGit: () => void;
   handleOpenGitReview: (sourceId?: GitChangeSourceId) => void;
   handleToggleSidePane: () => void;

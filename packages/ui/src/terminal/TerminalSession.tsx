@@ -96,6 +96,7 @@ export function TerminalSession({
   onOpenBrowserUrl,
   persistentKey,
   workspaceKey,
+  initialCommand,
 }: {
   sessionId: string;
   services: IServiceAccessor;
@@ -120,6 +121,11 @@ export function TerminalSession({
    * 不传时 fallback 到 cwd。下侧 terminal 不传 persistentKey，此值不生效。
    */
   workspaceKey?: string;
+  /**
+   * Command typed once into the shell after the PTY is ready (side-pane
+   * harness launch). Only the persistent (side pane) path honors it.
+   */
+  initialCommand?: string;
 }) {
   const { intl } = useZCodeIntl();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -138,6 +144,8 @@ export function TerminalSession({
   const exitedMessageRef = useRef("");
   const exitHandlerRef = useRef(onExit);
   const openBrowserUrlRef = useRef(onOpenBrowserUrl);
+  const initialCommandRef = useRef(initialCommand);
+  const initialCommandSentRef = useRef(false);
   const terminalProfileThemeRef = useRef<ITheme | undefined>(undefined);
   const pendingInputFallbacksRef = useRef<PendingTerminalInputFallback[]>([]);
   const inputFallbackKeydownCandidateRef = useRef<TerminalInputFallbackKeydownCandidate | null>(
@@ -148,6 +156,7 @@ export function TerminalSession({
   exitedMessageRef.current = intl.formatMessage({ id: "terminal.exited" });
   exitHandlerRef.current = onExit;
   openBrowserUrlRef.current = onOpenBrowserUrl;
+  initialCommandRef.current = initialCommand;
 
   const flushTerminalServiceResize = useCallback(() => {
     if (resizeInFlightRef.current) {
@@ -581,6 +590,18 @@ export function TerminalSession({
           scheduleFitAndResize("init");
           if (isVisibleRef.current) {
             requestFocus();
+          }
+          // Side-pane harness launch: type the requested command once the PTY
+          // exists. Guarded so remounts reusing the registry entry never
+          // retype into a live harness session.
+          const pendingInitialCommand = initialCommandRef.current?.trim();
+          if (pendingInitialCommand && !initialCommandSentRef.current) {
+            initialCommandSentRef.current = true;
+            logger.info("[Terminal] typing initial command (persistent)", {
+              terminalId: id,
+              terminalTabId: sessionId,
+            });
+            void services.terminalService.write({ id, data: `${pendingInitialCommand}\r` });
           }
 
           // data 订阅 → term.write（进 registry，detached 时仍累积 scrollback）

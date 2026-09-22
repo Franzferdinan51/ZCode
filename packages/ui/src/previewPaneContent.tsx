@@ -1,7 +1,7 @@
 import type { MarkdownSelectionTarget } from "@/lib/conversationSelectionReference.js";
 /* eslint-disable max-lines -- PreviewPane 内容路由同时承载文本、图片、媒体、Office、PDF 和 PPTX 渲染。 */
 import type { BundledTheme } from "shiki";
-import { useMemo, type Ref, type SyntheticEvent, type UIEventHandler } from "react";
+import { Suspense, lazy, useMemo, type Ref, type SyntheticEvent, type UIEventHandler } from "react";
 import type { FileBinaryPreview, FileMediaPreview, FileTextSlice } from "@zcode/shared";
 import { inferCodeLanguage } from "@/lib/codeViewer.js";
 import type { CodeViewerSource } from "@/lib/codeViewer.js";
@@ -12,19 +12,33 @@ import { MarkdownPreviewContent } from "@/previewPaneMarkdownContent.js";
 import { CodeContent } from "@/previewPaneCodeContent.js";
 import { ImagePreviewContent, SvgPreviewContent } from "@/previewPaneImageContent.js";
 import { PreviewPaneMediaContent } from "@/previewPaneMediaContent.js";
-import { PdfPreviewContent } from "@/previewPanePdfContent.js";
-import { PptxPreviewContent } from "@/previewPanePptxContent.js";
 import { PatchFallbackContent } from "@/previewPanePatchFallbackContent.js";
-import { DiffViewer } from "@/components/ui/diff-viewer.js";
 import type { PdfViewerLabels, PdfViewerSource } from "@/components/ui/pdf-viewer.js";
 import type { PptxPreviewViewerLabels } from "@/components/ui/pptx-preview-viewer.js";
 import type { CodeCommentPreview, CodeCommentRange } from "@/lib/codeCommentContext.js";
 import type { Theme } from "@/useTheme.js";
 import type { OfficeFilePreviewKind } from "@/lib/officeFilePreview.js";
-import { PreviewPaneOfficeContent } from "@/previewPaneOfficeContent.js";
 import type { PptxElementReferenceSource } from "@/lib/pptxElementReference.js";
 import type { MediaCodeViewerSource, PptxReferencePreviewNavigation } from "@/lib/codeViewer.js";
 import { resolveCodeReviewContentProjection } from "@/previewPaneCodeReview.js";
+
+// Heavy preview engines (PDF ~417KB, PPTX ~1MB, Office/xlsx, diff viewer) load on
+// demand: most sessions never open these preview kinds, and static imports here
+// defeat the dynamic imports in WorkflowArtifactBody (see INEFFECTIVE_DYNAMIC_IMPORT).
+const PdfPreviewContent = lazy(() =>
+  import("@/previewPanePdfContent.js").then((module) => ({ default: module.PdfPreviewContent })),
+);
+const PptxPreviewContent = lazy(() =>
+  import("@/previewPanePptxContent.js").then((module) => ({ default: module.PptxPreviewContent })),
+);
+const PreviewPaneOfficeContent = lazy(() =>
+  import("@/previewPaneOfficeContent.js").then((module) => ({
+    default: module.PreviewPaneOfficeContent,
+  })),
+);
+const DiffViewer = lazy(() =>
+  import("@/components/ui/diff-viewer.js").then((module) => ({ default: module.DiffViewer })),
+);
 
 interface PreviewPaneContentProps {
   source: CodeViewerSource;
@@ -180,15 +194,23 @@ export function PreviewPaneContent({
 
   if (source.type === "multi-file-diff" && multiFileDiffFiles) {
     return (
-      <DiffViewer
-        oldFile={multiFileDiffFiles.oldFile}
-        newFile={multiFileDiffFiles.newFile}
-        diffClassName="block"
-        fontSizePx={codePreviewSettings.fontSizePx}
-        lightTheme={codePreviewSettings.lightTheme}
-        darkTheme={codePreviewSettings.darkTheme}
-        themeType={resolvedTheme}
-      />
+      <Suspense
+        fallback={
+          <div className="p-3 text-ui-base text-foreground-subtle">
+            {intl.formatMessage({ id: "codeViewer.loadingFile" })}
+          </div>
+        }
+      >
+        <DiffViewer
+          oldFile={multiFileDiffFiles.oldFile}
+          newFile={multiFileDiffFiles.newFile}
+          diffClassName="block"
+          fontSizePx={codePreviewSettings.fontSizePx}
+          lightTheme={codePreviewSettings.lightTheme}
+          darkTheme={codePreviewSettings.darkTheme}
+          themeType={resolvedTheme}
+        />
+      </Suspense>
     );
   }
 
@@ -305,20 +327,38 @@ export function PreviewPaneContent({
       );
     }
 
-    return <PdfPreviewContent source={pdfViewerSource} labels={pdfViewerLabels} />;
+    return (
+      <Suspense
+        fallback={
+          <div className="p-3 text-ui-base text-foreground-subtle">
+            {intl.formatMessage({ id: "codeViewer.loadingPdf" })}
+          </div>
+        }
+      >
+        <PdfPreviewContent source={pdfViewerSource} labels={pdfViewerLabels} />
+      </Suspense>
+    );
   }
 
   if (source.type === "file" && officePreviewKind) {
     return (
-      <PreviewPaneOfficeContent
-        error={error}
-        kind={officePreviewKind}
-        loading={loadingOfficePreview}
-        onOpenBrowserUrl={onOpenBrowserUrl}
-        preview={officePreview}
-        resolvedTheme={resolvedTheme}
-        sourcePath={source.path}
-      />
+      <Suspense
+        fallback={
+          <div className="p-3 text-ui-base text-foreground-subtle">
+            {intl.formatMessage({ id: "codeViewer.loadingFile" })}
+          </div>
+        }
+      >
+        <PreviewPaneOfficeContent
+          error={error}
+          kind={officePreviewKind}
+          loading={loadingOfficePreview}
+          onOpenBrowserUrl={onOpenBrowserUrl}
+          preview={officePreview}
+          resolvedTheme={resolvedTheme}
+          sourcePath={source.path}
+        />
+      </Suspense>
     );
   }
 
@@ -345,15 +385,23 @@ export function PreviewPaneContent({
     }
 
     return (
-      <PptxPreviewContent
-        data={pptxPreviewData}
-        labels={pptxViewerLabels}
-        fileName={source.path}
-        onOpenBrowserUrl={onOpenBrowserUrl}
-        {...(pptxReferenceSource ? { referenceSource: pptxReferenceSource } : {})}
-        {...(pptxReferenceNavigation ? { referenceNavigation: pptxReferenceNavigation } : {})}
-        referenceNavigationReady={pptxReferenceNavigationReady}
-      />
+      <Suspense
+        fallback={
+          <div className="p-3 text-ui-base text-foreground-subtle">
+            {intl.formatMessage({ id: "codeViewer.loadingPptx" })}
+          </div>
+        }
+      >
+        <PptxPreviewContent
+          data={pptxPreviewData}
+          labels={pptxViewerLabels}
+          fileName={source.path}
+          onOpenBrowserUrl={onOpenBrowserUrl}
+          {...(pptxReferenceSource ? { referenceSource: pptxReferenceSource } : {})}
+          {...(pptxReferenceNavigation ? { referenceNavigation: pptxReferenceNavigation } : {})}
+          referenceNavigationReady={pptxReferenceNavigationReady}
+        />
+      </Suspense>
     );
   }
 

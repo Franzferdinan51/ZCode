@@ -12,7 +12,9 @@ import { cn } from "../lib/utils.js";
 import { CheckIcon, CopyIcon, Maximize2Icon, WrapTextIcon } from "lucide-react";
 import type { ComponentProps, CSSProperties, HTMLAttributes } from "react";
 import {
+  Suspense,
   createContext,
+  lazy,
   useCallback,
   useContext,
   useEffect,
@@ -29,11 +31,18 @@ import {
   getCurrentMermaidDocumentVisibility,
   resolveMermaidAutoRenderDecision,
 } from "@/lib/mermaidRenderBudget.js";
-import { MermaidBlock } from "@/components/ai-elements/mermaid-block.js";
 import { DiagramPreviewDialog } from "@/components/ai-elements/diagram-preview-dialog.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
 import type { Theme } from "@/useTheme.js";
+
+// Mermaid pulls @streamdown/mermaid + the mermaid renderer into every chat message
+// otherwise; only mermaid fenced blocks need it.
+const MermaidBlock = lazy(() =>
+  import("@/components/ai-elements/mermaid-block.js").then((module) => ({
+    default: module.MermaidBlock,
+  })),
+);
 
 // Types
 type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
@@ -325,13 +334,15 @@ export const CodeBlock = ({
         {children}
         <div className={cn("p-2 pt-0 pb-3", contentClassName)}>
           {shouldRenderMermaid ? (
-            <MermaidBlock
-              code={code}
-              theme={appTheme}
-              onOpenPreview={openMermaidPreview}
-              onPreviewSvgChange={setMermaidPreviewSvg}
-              // className={cn(children ? "border-t border-border" : null)}
-            />
+            <Suspense fallback={null}>
+              <MermaidBlock
+                code={code}
+                theme={appTheme}
+                onOpenPreview={openMermaidPreview}
+                onPreviewSvgChange={setMermaidPreviewSvg}
+                // className={cn(children ? "border-t border-border" : null)}
+              />
+            </Suspense>
           ) : (
             <CodeViewer
               code={code}

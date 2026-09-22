@@ -10,6 +10,7 @@ export function SidePaneTerminalPane({
   isVisible,
   isWindowsDesktop = false,
   onOpenBrowserUrl,
+  initialCommand,
 }: {
   services: IServiceAccessor;
   /**
@@ -27,6 +28,8 @@ export function SidePaneTerminalPane({
   isVisible: boolean;
   isWindowsDesktop?: boolean;
   onOpenBrowserUrl: (url: string) => void;
+  /** Command typed once into the shell after the PTY is ready (harness launch). */
+  initialCommand?: string;
 }) {
   const handleShellLabelChange = useCallback(() => {
     // 业务说明：side pane 外层 tab 已经承载终端标题，这里只需要单个 shell 实例，
@@ -45,6 +48,7 @@ export function SidePaneTerminalPane({
         isWindowsDesktop={isWindowsDesktop}
         onShellLabelChange={handleShellLabelChange}
         onOpenBrowserUrl={onOpenBrowserUrl}
+        initialCommand={initialCommand}
       />
     </section>
   );

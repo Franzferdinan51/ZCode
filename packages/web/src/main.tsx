@@ -433,6 +433,19 @@ async function bootstrapWebApp() {
     return;
   }
 
+  // Web mode only serves server-local workspaces; the remote WebSocket exposes a
+  // partial service accessor, so opening ?remote=<id> hangs in the wizard. Fail
+  // soft with a clear message instead. Drop the param first so Retry recovers.
+  if (params.get("remote")) {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("remote");
+    window.history.replaceState(null, "", url.toString());
+    renderWebBootstrapError(
+      new Error("Remote workspaces are not supported in Web mode yet."),
+    );
+    return;
+  }
+
   let bootstrap: WebBootstrapResult;
   try {
     bootstrap = await resolveWebBootstrap();

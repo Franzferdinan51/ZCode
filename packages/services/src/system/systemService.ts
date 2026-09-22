@@ -14,6 +14,7 @@ import type {
 } from "@zcode/shared";
 import type { ISystemService } from "./system.js";
 import { listIntegratedTerminalShellOptions } from "./integratedTerminalShells.js";
+import { resolveCommandOnPath } from "./commandResolver.js";
 
 const DEFAULT_PROBE_TIMEOUT_MS = 800;
 const DEFAULT_PROBE_ATTEMPTS = 2;
@@ -341,6 +342,8 @@ function probeTcpPort(params: TcpProbeParams): Promise<number> {
   });
 }
 
+const MAX_RESOLVE_COMMANDS = 64;
+
 export function createSystemService(options: CreateSystemServiceOptions = {}): ISystemService {
   const tcpProbe = options.tcpProbe ?? probeTcpPort;
   const serviceProbe = options.serviceProbe ?? probeServiceEndpoint;
@@ -359,6 +362,20 @@ export function createSystemService(options: CreateSystemServiceOptions = {}): I
         isExecutable: options.isExecutable,
         platform,
       });
+    },
+
+    async resolveCommands(request: {
+      commands: string[];
+    }): Promise<Record<string, string | null>> {
+      const resolved: Record<string, string | null> = {};
+      for (const command of (request.commands ?? []).slice(0, MAX_RESOLVE_COMMANDS)) {
+        resolved[command] = resolveCommandOnPath(command, {
+          env,
+          isExecutable: options.isExecutable,
+          platform,
+        });
+      }
+      return resolved;
     },
 
     async probeIntranet(request: IntranetProbeRequest): Promise<IntranetProbeResult> {

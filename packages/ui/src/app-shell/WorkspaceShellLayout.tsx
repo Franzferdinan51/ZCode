@@ -301,6 +301,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   handleOpenDeveloperTools,
   handleOpenHarnessRouter,
   handleOpenTerminalTab,
+  handleOpenTerminalTabWithCommand,
   handleToggleGit,
   handleOpenGitReview,
   handleToggleSidePane,
@@ -1462,6 +1463,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       onOpenDeveloperTools={handleOpenDeveloperTools}
       onOpenHarnessRouter={handleOpenHarnessRouter}
       onOpenTerminalTab={handleOpenTerminalTab}
+      onOpenTerminalTabWithCommand={handleOpenTerminalTabWithCommand}
       onOpenReviewTab={handleToggleGit}
       onOpenSelectionSideConversation={handleOpenSelectionSideConversationLauncher}
       onRevealGitFileInTree={handleRevealGitFileInTree}

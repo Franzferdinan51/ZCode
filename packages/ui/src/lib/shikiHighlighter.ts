@@ -53,17 +53,23 @@ function normalizeCodeLanguage(language: string): BundledLanguage {
   return FALLBACK_CODE_LANGUAGE;
 }
 
-const highlighterCache = new Map<
-  string,
-  Promise<HighlighterGeneric<BundledLanguage, BundledTheme>>
->();
+type ShikiHighlighter = HighlighterGeneric<BundledLanguage, BundledTheme>;
+
+// One engine per theme; languages load into it on demand. Previously every
+// theme x language pair built its own engine (each with its own wasm + grammar
+// set), so a chat mixing languages multiplied multi-MB engines.
+const themeHighlighterCache = new Map<BundledTheme, Promise<ShikiHighlighter>>();
+// Serializes loadLanguage per theme engine: concurrent grammar installs on one
+// engine are not safe to interleave.
+const themeLoadTails = new Map<BundledTheme, Promise<unknown>>();
+const highlighterCache = new Map<string, Promise<ShikiHighlighter>>();
+// Bounded LRU-ish: insertion-ordered Map, oldest evicted past the cap.
+const MAX_TOKENS_CACHE_ENTRIES = 500;
 const tokensCache = new Map<string, TokenizedCode>();
 const subscribers = new Map<string, Set<(result: TokenizedCode) => void>>();
-// 内存诊断计数器：tokensCache 目前无淘汰，是审计里
-// renderer 最可疑的增长点，先把条数落到日志里。
 uiMemoryDiagnosticsRegistry.register("shiki", () => ({
   tokensCache: tokensCache.size,
-  highlighters: highlighterCache.size,
+  highlighters: themeHighlighterCache.size,
 }));
 
 const getResolvedCodeTheme = (theme?: BundledTheme): BundledTheme => {
@@ -78,27 +84,72 @@ const getResolvedCodeTheme = (theme?: BundledTheme): BundledTheme => {
   return "github-light";
 };
 
-const getCodeTokensCacheKey = (code: string, language: BundledLanguage, theme: BundledTheme) => {
-  const start = code.slice(0, 100);
-  const end = code.length > 100 ? code.slice(-100) : "";
-  return `${theme}:${language}:${code.length}:${start}:${end}`;
+const hashCodeContent = (code: string): string => {
+  // FNV-1a over the full text: the old head/tail/length key collided for edits
+  // that only touched the middle of a same-length block.
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < code.length; index += 1) {
+    hash ^= code.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16);
 };
+
+const getCodeTokensCacheKey = (code: string, language: BundledLanguage, theme: BundledTheme) => {
+  return `${theme}:${language}:${code.length}:${hashCodeContent(code)}`;
+};
+
+const cacheTokenizedCode = (key: string, value: TokenizedCode): void => {
+  tokensCache.delete(key);
+  tokensCache.set(key, value);
+  while (tokensCache.size > MAX_TOKENS_CACHE_ENTRIES) {
+    const oldest = tokensCache.keys().next();
+    if (oldest.done) {
+      break;
+    }
+    tokensCache.delete(oldest.value);
+  }
+};
+
+const getThemeHighlighter = (theme: BundledTheme): Promise<ShikiHighlighter> => {
+  const cached = themeHighlighterCache.get(theme);
+  if (cached) {
+    return cached;
+  }
+  const highlighterPromise = createHighlighter({
+    langs: [],
+    themes: [theme],
+  });
+  themeHighlighterCache.set(theme, highlighterPromise);
+  return highlighterPromise;
+};
+
 const getHighlighter = (
   language: BundledLanguage,
   theme: BundledTheme,
-): Promise<HighlighterGeneric<BundledLanguage, BundledTheme>> => {
+): Promise<ShikiHighlighter> => {
   const cacheKey = `${theme}:${language}`;
   const cached = highlighterCache.get(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const highlighterPromise = createHighlighter({
-    langs: [language],
-    themes: [theme],
+  const tail = themeLoadTails.get(theme) ?? Promise.resolve();
+  const highlighterPromise: Promise<ShikiHighlighter> = tail.then(async () => {
+    const highlighter = await getThemeHighlighter(theme);
+    if (!highlighter.getLoadedLanguages().includes(language)) {
+      await highlighter.loadLanguage(language);
+    }
+    return highlighter;
   });
-
   highlighterCache.set(cacheKey, highlighterPromise);
+  themeLoadTails.set(
+    theme,
+    highlighterPromise.then(
+      () => undefined,
+      () => undefined,
+    ),
+  );
   return highlighterPromise;
 };
 
@@ -138,6 +189,9 @@ export const highlightCode = (
 
   const cached = tokensCache.get(tokensCacheKey);
   if (cached) {
+    // Refresh recency for the LRU bound.
+    tokensCache.delete(tokensCacheKey);
+    tokensCache.set(tokensCacheKey, cached);
     // 缓存命中时也需要通知 effect，但不能同步触发 setState。
     // 历史消息恢复时大量代码块会在同一次提交后挂载；同步 callback 会把 cache-hit 变成嵌套更新，
     // 和 Streamdown 的重渲染叠在一起时容易触发 React #185。推迟到微任务后再交给幂等 setter。
@@ -173,7 +227,7 @@ export const highlightCode = (
         tokens: result.tokens,
       };
 
-      tokensCache.set(tokensCacheKey, tokenized);
+      cacheTokenizedCode(tokensCacheKey, tokenized);
 
       const subs = subscribers.get(tokensCacheKey);
       if (subs) {

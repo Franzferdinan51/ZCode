@@ -6,7 +6,7 @@ import {
   type ZCodeKnownToolName,
   type ZCodeToolFamily,
 } from "@zcode/shared";
-import { normalizeAskUserQuestionInput, readAskUserQuestionInput } from "@/lib/askUserQuestion.js";
+import { normalizeAskUserQuestionInput, readAskUserQuestionInput } from "./askUserQuestion.js";
 
 export type ToolCallPresentationFamily =
   | ZCodeToolFamily

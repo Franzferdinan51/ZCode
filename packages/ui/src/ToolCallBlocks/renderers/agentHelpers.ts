@@ -1,6 +1,6 @@
-import type { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import type { ToolCallBlockRenderContext } from "@/ToolCallBlocks/shared.js";
-import { isSubagentColor } from "@/lib/subagentColors.js";
+import type { useZCodeIntl } from "../../i18n/IntlProvider.js";
+import type { ToolCallBlockRenderContext } from "../shared.js";
+import { isSubagentColor } from "../../lib/subagentColors.js";
 
 type AgentIntl = ReturnType<typeof useZCodeIntl>["intl"];
 type AgentToolCall = ToolCallBlockRenderContext["toolCallNode"]["toolCall"];

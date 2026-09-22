@@ -110,8 +110,23 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.VITE_ZAI_OAUTH_ORIGIN": JSON.stringify(zaiOAuthOrigin),
     },
     build: {
-      // 生产不在浏览器产物暴露 sourceMappingURL，避免客户端侧还原业务源码。
-      sourcemap: mode === "production" ? "hidden" : true,
+      // Production emits no sourcemaps at all: "hidden" still writes ~82MB of
+      // .map files into the shipped bundle with no runtime consumer (no
+      // sourceMappingURL is emitted, nothing uploads them). Dev keeps maps.
+      sourcemap: mode === "production" ? false : true,
+      rollupOptions: {
+        output: {
+          // Split third-party code out of the entry chunk so app edits don't
+          // invalidate the vendor cache (and vice versa). Without this, every
+          // dependency lands in one ~5.7MB index chunk on first load.
+          manualChunks(id) {
+            if (id.includes("node_modules")) {
+              return "vendor";
+            }
+            return undefined;
+          },
+        },
+      },
     },
   };
 });

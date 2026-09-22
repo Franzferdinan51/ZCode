@@ -230,6 +230,7 @@ export function App({
     handleOpenDeveloperTools,
     handleOpenHarnessRouter,
     handleOpenTerminalTab,
+    handleOpenTerminalTabWithCommand,
     handleOpenSubagentSession,
     handleOpenBackgroundBash,
     handleOpenSubagentDirectory,
@@ -560,6 +561,14 @@ export function App({
       handleOpenTerminalTab();
     }
   }, [handleOpenTerminalTab, workspaceReadOnlyReason]);
+  const handleOpenTerminalTabWithCommandIfWritable = useCallback(
+    (params: { command: string; title: string }) => {
+      if (!workspaceReadOnlyReason) {
+        handleOpenTerminalTabWithCommand(params);
+      }
+    },
+    [handleOpenTerminalTabWithCommand, workspaceReadOnlyReason],
+  );
   const handleOpenGitIfWritable = useCallback(() => {
     if (!workspaceReadOnlyReason) {
       handleOpenGit();
@@ -1234,6 +1243,7 @@ export function App({
         handleOpenDeveloperTools={handleOpenDeveloperTools}
         handleOpenHarnessRouter={handleOpenHarnessRouter}
         handleOpenTerminalTab={handleOpenTerminalTabIfWritable}
+        handleOpenTerminalTabWithCommand={handleOpenTerminalTabWithCommandIfWritable}
         handleToggleGit={handleToggleGitIfWritable}
         handleToggleSidePane={handleToggleSidePane}
         handleOpenBrowserUrl={handleOpenBrowserUrl}

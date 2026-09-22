@@ -1,13 +1,21 @@
 import type { BundledLanguage, BundledTheme } from "shiki";
 import type { Ref, UIEventHandler } from "react";
+import { Suspense, lazy } from "react";
 import { cn } from "@/components/lib/utils.js";
-import { MermaidBlock } from "@/components/ai-elements/mermaid-block.js";
 import { CodeViewer } from "@/components/ui/code-viewer.js";
 import type { CodeCommentLabels } from "@/components/ui/code-viewer.js";
 import type { CodePreviewSettings } from "@/store/index.js";
 import type { CodeCommentPreview, CodeCommentRange } from "@/lib/codeCommentContext.js";
 import { isMermaidLanguage } from "@/lib/mermaidLanguage.js";
 import type { Theme } from "@/useTheme.js";
+
+// Mermaid's renderer must not ride the code-preview entry chunk; only mermaid
+// sources render it.
+const MermaidBlock = lazy(() =>
+  import("@/components/ai-elements/mermaid-block.js").then((module) => ({
+    default: module.MermaidBlock,
+  })),
+);
 
 interface CodeContentProps {
   code: string;
@@ -68,11 +76,13 @@ export function CodeContent({
         className={cn("h-full w-full overflow-auto bg-background p-4", className)}
         onScroll={onScroll}
       >
-        <MermaidBlock
-          code={code}
-          theme={theme}
-          className="min-h-full rounded-xl border border-border"
-        />
+        <Suspense fallback={null}>
+          <MermaidBlock
+            code={code}
+            theme={theme}
+            className="min-h-full rounded-xl border border-border"
+          />
+        </Suspense>
       </div>
     );
   }

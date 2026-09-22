@@ -108,32 +108,50 @@ function shimmerTextSegments(
   });
 }
 
-export function useShimmerFrame(animated: boolean): number {
+// One shared 80ms ticker for every shimmer/spinner on screen. Previously each
+// hook instance owned its own interval, so N animated elements meant N timers
+// waking up to setState the same Date.now(); frames derive from the timestamp,
+// so sharing the tick is behavior-identical.
+type TickListener = (frameMs: number) => void;
+
+const tickListeners = new Set<TickListener>();
+let sharedTicker: ReturnType<typeof setInterval> | null = null;
+
+const SHARED_TICK_INTERVAL_MS = Math.min(SHIMMER_FRAME_INTERVAL_MS, SPINNER_FRAME_INTERVAL_MS);
+
+function useSharedTick(animated: boolean): number {
   const [frameMs, setFrameMs] = useState(() => Date.now());
 
   useEffect(() => {
     if (!animated) return undefined;
-    const timer = setInterval(() => {
-      setFrameMs(Date.now());
-    }, SHIMMER_FRAME_INTERVAL_MS);
-    return () => clearInterval(timer);
+    if (!sharedTicker) {
+      sharedTicker = setInterval(() => {
+        const now = Date.now();
+        for (const listener of tickListeners) {
+          listener(now);
+        }
+      }, SHARED_TICK_INTERVAL_MS);
+    }
+    const listener: TickListener = (now) => setFrameMs(now);
+    tickListeners.add(listener);
+    return () => {
+      tickListeners.delete(listener);
+      if (tickListeners.size === 0 && sharedTicker) {
+        clearInterval(sharedTicker);
+        sharedTicker = null;
+      }
+    };
   }, [animated]);
 
   return frameMs;
 }
 
+export function useShimmerFrame(animated: boolean): number {
+  return useSharedTick(animated);
+}
+
 export function useSpinnerFrame(animated: boolean): string {
-  const [frameMs, setFrameMs] = useState(() => Date.now());
-
-  useEffect(() => {
-    if (!animated) return undefined;
-    const timer = setInterval(() => {
-      setFrameMs(Date.now());
-    }, SPINNER_FRAME_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, [animated]);
-
-  return spinnerFrame(frameMs);
+  return spinnerFrame(useSharedTick(animated));
 }
 
 export function spinnerFrame(frameMs: number): string {
