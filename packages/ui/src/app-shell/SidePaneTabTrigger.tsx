@@ -14,6 +14,7 @@ import {
   NotepadTextIcon,
   PackageIcon,
   PaletteIcon,
+  Route as RouteIcon,
   SquareTerminalIcon,
   TerminalIcon,
   WaypointsIcon,
@@ -328,14 +329,19 @@ export function SidePaneTabIcon({ tab }: { tab: WorkspaceSidePaneTab }) {
     return <BugIcon className="size-3.5" />;
   }
 
+  if (tab.type === "harness-router") {
+    return <RouteIcon className="size-3.5" />;
+  }
+
   if (tab.type === "terminal" || tab.type === "bash-output") {
     return <SquareTerminalIcon className="size-3.5" />;
   }
 
-  // 同 getSidePaneTabTitle——browser-use tab 无 source，若不在此拦截会 fallthrough
-  // 到下方 `tab.source.type` 读 undefined.type 崩溃。
-  // agent 导航后由 <webview> favicon 事件回填 faviconUrl，与 human browser tab 一致地展示真实图标；
-  // 缺省（about:blank/未取到）回退地球图标。
+  // Same as getSidePaneTabTitle: browser-use tabs have no source, so without this
+  // interception they fall through to `tab.source.type` below and crash on
+  // undefined.type. After agent navigation the <webview> favicon event backfills
+  // faviconUrl and the real icon renders like a human browser tab; when missing
+  // (about:blank/unfetched) fall back to the globe icon.
   if (tab.type === "browser-use") {
     return <BrowserUseTabIcon tab={tab} />;
   }
@@ -536,13 +542,18 @@ export function getSidePaneTabTitle(
     return formatMessage({ id: "developerTools.title" });
   }
 
+  if (tab.type === "harness-router") {
+    return formatMessage({ id: "sidePane.harnessRouter" });
+  }
+
   if (tab.type === "terminal" || tab.type === "bash-output") {
     return tab.title || formatMessage({ id: "terminal.title" });
   }
 
-  // browser-use tab 之前未在此分派，会 fallthrough 到底部 `tab.source.title`，
-  // 而 browser-use tab 无 source 字段 → 读 undefined.title 触发 React 崩溃（整棵 workspace 子树挂掉）。
-  // 用页面标题（agent 导航后由 getState 回填），缺省复用 browser.title 文案。
+  // browser-use tabs were never dispatched here and fell through to `tab.source.title`
+  // at the bottom — but they have no source field, so reading undefined.title crashed
+  // React (taking down the whole workspace subtree). Use the page title (backfilled by
+  // getState after agent navigation), defaulting to the browser.title copy.
   if (tab.type === "browser-use") {
     return tab.title?.trim() || formatMessage({ id: "browser.title" });
   }

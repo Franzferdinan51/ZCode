@@ -9,6 +9,7 @@ export interface SidePaneTabPresentationLabels {
   whiteboardTitle: string;
   modelTrajectoryTitle: string;
   developerToolsTitle: string;
+  harnessRouterTitle: string;
   terminalTitle: string;
   subagentTypeLabel: string;
   subagentDirectoryTitle: string;
@@ -32,14 +33,14 @@ export function getSidePaneTabSearchHint(tab: WorkspaceSidePaneTab): string {
     return `${tab.parentSessionId} workflow runs directory history ended`;
   }
   if (tab.type === "workflow-actor-session") {
-    // 会话 id 也进搜索面：排查时手里往往只有它（日志与 journal 都记它）。
+    // Session ids are searchable too: when debugging, that is often all you have (logs and journal record it).
     return `${tab.actorName ?? ""} ${tab.siteId}@${tab.ordinal} ${tab.actorSessionId ?? ""} ${tab.runId} ${tab.parentSessionId} workflow subagent actor transcript`;
   }
   if (tab.type === "workflow-workspace") {
     return `${tab.workflowName ?? ""} ${tab.runId} ${tab.toolCallId} ${tab.parentSessionId} workflow script steps workspace transcript files git run`;
   }
   if (tab.type === "workflow-artifact") {
-    // 产物 id 是脚本里写死的字面量，用户与排查者手里往往就是它。
+    // Artifact ids are literals baked into the script; users and debuggers usually hold exactly that.
     return `${tab.title ?? ""} ${tab.artifactId} ${tab.runId} ${tab.parentSessionId} workflow artifact deliverable`;
   }
   if (tab.type === "selection-side-chat") {
@@ -64,6 +65,9 @@ export function getSidePaneTabSearchHint(tab: WorkspaceSidePaneTab): string {
   if (tab.type === "developer-tools") {
     return "developer tools token debug network status request response headers";
   }
+  if (tab.type === "harness-router") {
+    return "harness router route provider model default selection";
+  }
   if (tab.type === "terminal" || tab.type === "bash-output")
     return `${tab.title} terminal shell command`;
   return tab.source.path ?? tab.source.title;
@@ -82,6 +86,7 @@ export function getLocalizedSidePaneTabTitle(
       "whiteboard.title": labels.whiteboardTitle,
       "modelTrajectory.title": labels.modelTrajectoryTitle,
       "developerTools.title": labels.developerToolsTitle,
+      "sidePane.harnessRouter": labels.harnessRouterTitle,
       "terminal.title": labels.terminalTitle,
       "sidePane.subagent": labels.subagentTypeLabel,
       "sidePane.subagentDirectory": labels.subagentDirectoryTitle,
@@ -117,6 +122,7 @@ export function getSidePaneTabTypeLabel(
   if (tab.type === "whiteboard") return labels.whiteboardTitle;
   if (tab.type === "model-trajectory") return labels.modelTrajectoryTitle;
   if (tab.type === "developer-tools") return labels.developerToolsTitle;
+  if (tab.type === "harness-router") return labels.harnessRouterTitle;
   if (tab.type === "terminal" || tab.type === "bash-output") return labels.terminalTitle;
   return labels.codeViewerTitle;
 }

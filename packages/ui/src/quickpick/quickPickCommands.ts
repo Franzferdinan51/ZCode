@@ -13,7 +13,8 @@ export type QuickPickCommandIcon =
   | "skills"
   | "themeDark"
   | "themeLight"
-  | "terminal";
+  | "terminal"
+  | "route";
 
 export type QuickPickCommandSectionId =
   | "suggested"
@@ -59,6 +60,7 @@ interface QuickPickCommandHandlers {
   openTerminalTab: () => void;
   openBrowserTab: () => void;
   openReviewTab: () => void;
+  openHarnessRouter: () => void;
 }
 
 interface CreateQuickPickCommandsOptions {
@@ -185,6 +187,14 @@ export function createQuickPickCommands({
       icon: "diff",
       keywords: ["add", "review", "diff", "changes", "添加审查", "审查标签", "变更"],
       run: handlers.openReviewTab,
+    },
+    {
+      id: "open-harness-router",
+      sectionId: "panels",
+      titleId: "quickPick.command.openHarnessRouter",
+      icon: "route",
+      keywords: ["harness", "router", "route", "provider", "model", "default"],
+      run: handlers.openHarnessRouter,
     },
     {
       id: "settings",

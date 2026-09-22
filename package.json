@@ -1,6 +1,6 @@
 {
   "name": "zcode",
-  "version": "3.15.0",
+  "version": "3.16.0",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
@@ -20,6 +20,7 @@
     "build": "pnpm -r build",
     "build:desktop-agent:bytecode": "node scripts/build-desktop-agent-bytecode.mjs",
     "build:zcode": "node scripts/build-zcode.mjs",
+    "build:electron-manifest": "node scripts/build-electron-manifest.mjs",
     "build:bootstrap": "pnpm -r --filter \"./packages/*\" --filter \"!@zcode/desktop\" build && pnpm --filter @zcode/desktop build:no-runtime-assets",
     "build:sea": "pnpm --dir apps/zcode-cli build:sea",
     "build:sea:all": "pnpm install && pnpm --dir apps/zcode-cli build:sea",

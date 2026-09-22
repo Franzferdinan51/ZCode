@@ -72,7 +72,7 @@ export interface ModelTrajectorySidePaneTab {
   ownerTaskId?: string | null;
   workspaceKey?: string | null;
   openedAt?: number;
-  /** 目标 task/session id；model-io 按该 id 匹配。 */
+  /** Target task/session id; model-io matches on this id. */
   taskId: string;
   title?: string | null;
 }
@@ -80,6 +80,14 @@ export interface ModelTrajectorySidePaneTab {
 export interface DeveloperToolsSidePaneTab {
   id: "developer-tools";
   type: "developer-tools";
+  ownerTaskId?: string | null;
+  workspaceKey?: string | null;
+  openedAt?: number;
+}
+
+export interface HarnessRouterSidePaneTab {
+  id: "harness-router";
+  type: "harness-router";
   ownerTaskId?: string | null;
   workspaceKey?: string | null;
   openedAt?: number;
@@ -522,6 +530,7 @@ export type WorkspaceSidePaneTab =
   | WhiteboardSidePaneTab
   | ModelTrajectorySidePaneTab
   | DeveloperToolsSidePaneTab
+  | HarnessRouterSidePaneTab
   | TerminalSidePaneTab
   | BrowserUseSidePaneTab
   | SubagentSessionSidePaneTab
@@ -655,7 +664,7 @@ function createModelTrajectorySidePaneTab(options: {
   title?: string | null;
 }): ModelTrajectorySidePaneTab {
   return {
-    // 同一个 task 复用同一个 tab，避免重复打开多份相同轨迹。
+    // One task reuses one tab; never open duplicate copies of the same trajectory.
     id: `model-trajectory:${options.taskId}`,
     type: "model-trajectory",
     openedAt: Date.now(),
@@ -668,6 +677,14 @@ function createDeveloperToolsSidePaneTab(): DeveloperToolsSidePaneTab {
   return {
     id: "developer-tools",
     type: "developer-tools",
+    openedAt: Date.now(),
+  };
+}
+
+function createHarnessRouterSidePaneTab(): HarnessRouterSidePaneTab {
+  return {
+    id: "harness-router",
+    type: "harness-router",
     openedAt: Date.now(),
   };
 }
@@ -1046,7 +1063,7 @@ export function getActiveSidePaneTab(
   return current.tabs.find((tab) => tab.id === current.activeTabId) ?? null;
 }
 
-/** 把草稿态的 null/undefined 归一，供侧栏按对话隔离。 */
+/** Normalize draft-state null/undefined so the side pane can isolate by conversation. */
 export function sidePaneOwnerKey(taskId: string | null | undefined): string {
   return taskId ?? "__draft__";
 }
@@ -1054,6 +1071,7 @@ export function sidePaneOwnerKey(taskId: string | null | undefined): string {
 const WORKSPACE_GLOBAL_SIDE_PANE_TAB_TYPES = new Set<WorkspaceSidePaneTab["type"]>([
   "git",
   "developer-tools",
+  "harness-router",
   "treemapping",
 ]);
 
@@ -1584,6 +1602,23 @@ export function activateDeveloperToolsSidePane(
   current: WorkspaceSidePaneState | null,
 ): WorkspaceSidePaneState {
   return activateSidePaneTab(current, createDeveloperToolsSidePaneTab());
+}
+
+export function activateHarnessRouterSidePane(
+  current: WorkspaceSidePaneState | null,
+): WorkspaceSidePaneState {
+  return activateSidePaneTab(current, createHarnessRouterSidePaneTab());
+}
+
+export function toggleHarnessRouterSidePane(
+  current: WorkspaceSidePaneState | null,
+): WorkspaceSidePaneState | null {
+  const activeTab = getActiveSidePaneTab(current);
+  if (activeTab?.type === "harness-router") {
+    return closeSidePaneTab(current, activeTab.id);
+  }
+
+  return activateHarnessRouterSidePane(current);
 }
 
 export function openTerminalSidePane(

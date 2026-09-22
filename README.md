@@ -188,12 +188,13 @@ The default target is macOS arm64, and the default output directory is `packages
 
 Run `pnpm build:zcode` to build the CLI/TUI, backend, and Web client, collect the TUI native libraries, workers, and runtime dependencies, then assemble the distribution. Running the distribution still requires Node.js; use the version specified in `mise.toml`.
 
-Before packaging, set the download base URL with `ZCODE_DIST_BASE_URL` in `.env`, `.env.local`, or the process environment, or pass it through `--base-url`. The URL below is a placeholder; replace it with your hosting URL when publishing:
+Builds default to our GitHub releases as the download base URL, so installs and updates always pull our binaries. Override with `ZCODE_DIST_BASE_URL` in `.env`, `.env.local`, or the process environment, or pass `--base-url` (explicit mirrors only; official Z.ai does not publish this layout, so never point it at official hosts).
 
 ```bash
-pnpm build:zcode --base-url https://downloads.example.com/zcode/
+# Release build, pinned to its own tag URL for reproducibility
+pnpm build:zcode --base-url https://github.com/Franzferdinan51/ZCode/releases/download/zcode-local-v3.15.0/
 
-# When ZCODE_DIST_BASE_URL is already configured
+# Floating build (installs/updates resolve our latest release)
 pnpm build:zcode
 
 # Repackage existing Agent, backend, and Web build outputs
@@ -209,7 +210,21 @@ The version defaults to the root `package.json` version. Output is written to `d
 - `releases/<version>/sha256.txt`: checksum file.
 - `latest.json` and `install.sh`: version index and installer.
 
-Upload the entire directory to the configured download base URL. The installer downloads the runtime package from that URL, installs it to `~/.zcode-local/runtime` by default, and creates the `zcode-local` command in `~/.local/bin`. Override these directories with `ZCODE_DIST_HOME` and `ZCODE_DIST_BIN_DIR`, respectively.
+Attach these files to the GitHub release. To ship desktop auto-updates from the same release, also generate and attach the Electron manifest (desktop file URLs must be absolute):
+
+```bash
+pnpm build:electron-manifest --version 3.15.0 \
+  --asset-base-url https://github.com/Franzferdinan51/ZCode/releases/download/zcode-local-v3.15.0/ \
+  --asset "ZCode-Local-3.15.0.dmg:<sha512>"
+```
+
+Install or update from our latest release:
+
+```bash
+curl -fsSL https://github.com/Franzferdinan51/ZCode/releases/latest/download/install.sh | sh
+```
+
+The installer downloads the runtime package from that release, installs it to `~/.zcode-local/runtime` by default, and creates the `zcode-local` command in `~/.local/bin`. Override these directories with `ZCODE_DIST_HOME` and `ZCODE_DIST_BIN_DIR`, respectively. Every install verifies the `latest.json` sha256 checksum before unpacking and refuses to install when it is missing or mismatched.
 
 Existing Lite users should switch to the new build command, environment variables, and installer. Installation does not remove old Lite directories or migrate/delete session data.
 

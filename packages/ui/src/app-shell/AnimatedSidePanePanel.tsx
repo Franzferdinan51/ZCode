@@ -29,6 +29,7 @@ import { TreemappingPane } from "@/TreemappingPane.js";
 import { WhiteboardPane } from "@/WhiteboardPane.js";
 import { ModelTrajectoryPane } from "@/ModelTrajectoryPane.js";
 import { DeveloperToolsPane } from "@/DeveloperToolsPane.js";
+import { HarnessRouterSidePane } from "@/app-shell/HarnessRouterSidePane.js";
 import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
 import {
@@ -95,6 +96,7 @@ import {
   GlobeIcon,
   MessageSquareTextIcon,
   PlusIcon,
+  Route as RouteIcon,
   SquareTerminalIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -313,6 +315,7 @@ export function AnimatedSidePanePanel({
   onOpenBrowserTab,
   onOpenWhiteboard: _onOpenWhiteboard,
   onOpenDeveloperTools,
+  onOpenHarnessRouter,
   onOpenTerminalTab,
   onOpenReviewTab,
   onOpenSelectionSideConversation,
@@ -378,6 +381,7 @@ export function AnimatedSidePanePanel({
   onOpenBrowserTab: () => void;
   onOpenWhiteboard: () => void;
   onOpenDeveloperTools: () => void;
+  onOpenHarnessRouter: () => void;
   onOpenTerminalTab: () => void;
   onOpenReviewTab: () => void;
   onOpenSelectionSideConversation: () => void;
@@ -387,11 +391,11 @@ export function AnimatedSidePanePanel({
   onOpenFileLink?: (target: MessageFileLinkTarget) => void;
   onOpenBackgroundBash?: (request: OpenBackgroundBashSideTabRequest) => void;
   onOpenSubagentSession: (request: OpenScopedSubagentSideTabRequest) => void;
-  /** run 详情页里点 ask 节点 → 打开那个 actor 实例的 transcript tab。 */
+  /** Clicking an ask node on a run detail page opens that actor instance's transcript tab. */
   onOpenWorkflowActorSession?: (request: OpenScopedWorkflowActorSessionSideTabRequest) => void;
-  /** run 详情页里点脚本行 → 打开该 run 的脚本 transcript tab，落到那一站。 */
+  /** Clicking a script line on a run detail page opens that run's script transcript tab, scrolled to that stop. */
   onOpenWorkflowWorkspace?: (request: OpenScopedWorkflowWorkspaceSideTabRequest) => void;
-  /** run 详情页里点一张产物卡 → 打开那个产物的全尺寸查看 tab。 */
+  /** Clicking an artifact card on a run detail page opens that artifact's full-size viewer tab. */
   onOpenWorkflowArtifact?: (request: OpenScopedWorkflowArtifactSideTabRequest) => void;
   /** run 目录页里点一行 → 打开那个 run 的详情页 tab（目录 → 详情是这一页存在的理由）。 */
   onOpenWorkflowRun?: (request: OpenScopedWorkflowRunSideTabRequest) => void;
@@ -757,6 +761,15 @@ export function AnimatedSidePanePanel({
             <span>{intl.formatMessage({ id: "developerTools.title" })}</span>
           </DropdownMenuItem>
         ) : null}
+        <DropdownMenuItem
+          data-side-pane-add-item="harness-router"
+          onSelect={() => {
+            onOpenHarnessRouter();
+          }}
+        >
+          <RouteIcon className="size-4" />
+          <span>{intl.formatMessage({ id: "sidePane.harnessRouter" })}</span>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -790,6 +803,12 @@ export function AnimatedSidePanePanel({
       label: intl.formatMessage({ id: "developerTools.title" }),
       icon: BugIcon,
       onOpen: onOpenDeveloperTools,
+    },
+    "harness-router": {
+      id: "harness-router",
+      label: intl.formatMessage({ id: "sidePane.harnessRouter" }),
+      icon: RouteIcon,
+      onOpen: onOpenHarnessRouter,
     },
   };
   const openTabLauncherItems: OpenTabLauncherItem[] = resolveOpenTabLauncherItemIds({
@@ -884,6 +903,9 @@ export function AnimatedSidePanePanel({
         }),
         developerToolsTitle: intl.formatMessage({
           id: "developerTools.title",
+        }),
+        harnessRouterTitle: intl.formatMessage({
+          id: "sidePane.harnessRouter",
         }),
         terminalTitle: intl.formatMessage({ id: "terminal.title" }),
         subagentTypeLabel: intl.formatMessage({ id: "sidePane.subagent" }),
@@ -1250,6 +1272,14 @@ export function AnimatedSidePanePanel({
                               workspacePath={workspaceAbsPath}
                               workspaceIdentity={workspaceIdentity}
                               taskId={activeTaskId}
+                              enabled={isVisible && tab.id === visibleActiveTabId}
+                            />
+                          </ServiceProvider>
+                        ) : tab.type === "harness-router" ? (
+                          <ServiceProvider services={services}>
+                            <HarnessRouterSidePane
+                              workspacePath={workspaceAbsPath}
+                              workspaceIdentity={workspaceIdentity}
                               enabled={isVisible && tab.id === visibleActiveTabId}
                             />
                           </ServiceProvider>

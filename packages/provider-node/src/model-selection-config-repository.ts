@@ -4,7 +4,7 @@ export interface NodeModelSelectionConfigRepositoryOptions {
   readonly personalRepository: PersonalProviderConfigRepository;
 }
 
-/** 默认选择只是 Personal 文件的一个字段；IO、锁和失效通知由同一个 Repository 拥有。 */
+/** The default selection is just one field of the Personal file; IO, locking, and invalidation notices are owned by the same Repository. */
 export class NodeModelSelectionConfigRepository {
   readonly #personal: PersonalProviderConfigRepository;
   readonly #subscriptions = new Set<() => void>();
@@ -17,6 +17,12 @@ export class NodeModelSelectionConfigRepository {
   async read(): Promise<ModelSelection | undefined> {
     this.#assertNotDisposed();
     return (await this.#personal.read()).defaultModelSelection;
+  }
+
+  async saveDefault(
+    selection: ModelSelection | undefined,
+  ): Promise<ModelSelection | undefined> {
+    return this.saveConfiguredDefault(selection);
   }
 
   async saveConfiguredDefault(
@@ -45,10 +51,10 @@ export class NodeModelSelectionConfigRepository {
     if (this.#disposed) return;
     this.#disposed = true;
     for (const dispose of this.#subscriptions) dispose();
-    // 不销毁共享 Personal Repository；它仍由 Config Runtime 生命周期管理。
+    // Do not destroy the shared Personal Repository; its lifetime is still managed by the Config Runtime.
   }
 
   #assertNotDisposed(): void {
-    if (this.#disposed) throw new Error("NodeModelSelectionConfigRepository 已 dispose");
+    if (this.#disposed) throw new Error("NodeModelSelectionConfigRepository disposed");
   }
 }

@@ -75,6 +75,8 @@ import {
   ZCODE_TELEMETRY_ENABLED,
   ZCODE_ARMS_RUM_ENDPOINT,
   buildZCodeEndpointUrls,
+  isUpdaterEnabledFlavor,
+  LOCAL_ELECTRON_MANIFEST_URL,
   resolveZCodeEndpointOrigin,
   shouldEnableE2ETestBridge,
   type UpdateStatePayload,
@@ -1939,11 +1941,14 @@ app.whenReady().then(async () => {
   await hydratePendingPostUpdateReleaseNotes(mainSettingService);
   logWindowsBundledRuntimeIntegrityDiagnostic();
 
-  // 启动自动更新检查（后台执行，不阻塞主界面）
-  // Preview 身份无论连接哪个后端都不自动更新：stable feed 上只分发正式 ZCode 安装包，
-  // 不向 Preview 渠道提供更新。
+  // Kick off the auto-update check (background, never blocks first paint).
+  // Preview identity never auto-updates regardless of backend: the stable feed only
+  // ships production ZCode installers and serves no preview channel.
+  // The local identity (this fork's default) updates from OUR GitHub releases and
+  // never touches the official feed: official installers don't understand the
+  // fork layout and would break the installation.
   void initAutoUpdater({
-    enabled: ZCODE_PRODUCT_FLAVOR === "production",
+    enabled: isUpdaterEnabledFlavor(ZCODE_PRODUCT_FLAVOR),
     onBeforeQuitAndInstall: async () => {
       notifyStabilityLifecycle("update_install");
       await prepareAppQuit("auto-update quitAndInstall", "update-install");
@@ -1955,10 +1960,11 @@ app.whenReady().then(async () => {
     locale: currentApplicationLocale,
     deviceMid,
     resolveEndpointOrigin: resolveCurrentZCodeEndpointOrigin,
+    // Explicit startup overrides (dev builds only) win; local identity defaults to the fork manifest.
     updateFeedSource: resolveUpdateFeedSourceFromStartupConfig({
       argv: process.argv,
       env: process.env,
-    }),
+    }) ?? (ZCODE_PRODUCT_FLAVOR === "local" ? { url: LOCAL_ELECTRON_MANIFEST_URL } : undefined),
   });
 
   if (process.platform === "darwin" || process.platform === "win32") {

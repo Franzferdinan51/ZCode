@@ -1,14 +1,16 @@
 import {
   ZCODE_PRODUCT_FLAVOR,
+  isUpdaterEnabledFlavor,
   type ZCodeProductFlavor,
   type UpdateStatePayload,
 } from "@zcode/shared";
 
-// 更新入口跟随产品身份而不是后端环境：Preview 身份（含生产后端的 Preview）禁用更新器。
+// The update entry follows product identity, not backend env: preview identity
+// (including production-backend preview) disables the updater.
 export function shouldShowDesktopUpdateEntry(
   flavor: ZCodeProductFlavor = ZCODE_PRODUCT_FLAVOR,
 ): boolean {
-  return flavor === "production";
+  return isUpdaterEnabledFlavor(flavor);
 }
 
 export function getUpdateMenuLabelId(state: UpdateStatePayload | null) {

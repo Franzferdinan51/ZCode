@@ -14,7 +14,12 @@ import { installScriptSource } from "./zcode-distribution/installer.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const defaultOutDir = resolve(root, "dist", "zcode");
-const defaultBaseUrl = (await loadEndpointEnv()).ZCODE_DIST_BASE_URL?.trim() || "";
+// Keep in sync with LOCAL_UPDATE_BASE_URL in packages/shared/src/localUpdateFeed.ts
+// (workspace .mjs scripts cannot import TS sources). Installs and updates resolve
+// our latest GitHub release unless --base-url / ZCODE_DIST_BASE_URL pins another.
+const LOCAL_UPDATE_BASE_URL =
+  "https://github.com/Franzferdinan51/ZCode/releases/latest/download/";
+const defaultBaseUrl = (await loadEndpointEnv()).ZCODE_DIST_BASE_URL?.trim() || LOCAL_UPDATE_BASE_URL;
 const packageDirName = "zcode";
 const usage = `Usage:
   pnpm build:zcode
@@ -28,6 +33,8 @@ Options:
   --version <text>    Release version. Defaults to root package.json version.
   --out-dir <path>    Output directory. Defaults to dist/zcode.
   --base-url <url>    Default install.sh download base URL.
+                      Defaults to our latest GitHub release; pass the release
+                      tag URL for a pinned, reproducible release build.
   --help, -h          Show this help.
 `;
 
@@ -184,7 +191,7 @@ async function stageZCodePackage({ packageRoot, version }) {
     recursive: true,
   });
   await cp(agentBundle, resolve(packageRoot, "agent", "zcode.cjs"));
-  // TUI 入口通过真正的 CLI 路径定位伴随配置；只复制 JS 会在仓库外启动失败。
+  // The TUI entry locates its companion config through the real CLI path; copying only the JS breaks startup outside the repo.
   await cp(agentProvider, resolve(packageRoot, "agent/provider"), { recursive: true });
   await cp(
     resolve(root, "apps/zcode-cli/packages/cli/dist/THIRD-PARTY-NOTICES.md"),
@@ -232,8 +239,7 @@ async function createTarball({ packageParent, releaseDir, tarballName }) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  if (!options.help && !options.baseUrl)
-    throw new Error("Configure ZCODE_DIST_BASE_URL in .env or pass --base-url");
+  if (!options.baseUrl) throw new Error("Unable to resolve download base URL.");
   if (options.help) {
     console.log(usage);
     return;

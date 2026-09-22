@@ -228,6 +228,7 @@ export function App({
     handleOpenTreemapping,
     handleOpenWhiteboard,
     handleOpenDeveloperTools,
+    handleOpenHarnessRouter,
     handleOpenTerminalTab,
     handleOpenSubagentSession,
     handleOpenBackgroundBash,
@@ -1025,6 +1026,7 @@ export function App({
           openTerminalTab: () => runVisibleWorkspaceCommand(handleOpenTerminalTabIfWritable),
           openBrowserTab: () => runVisibleWorkspaceCommand(handleOpenBrowserTab),
           openReviewTab: () => runVisibleWorkspaceCommand(handleOpenGitIfWritable),
+          openHarnessRouter: () => runVisibleWorkspaceCommand(handleOpenHarnessRouter),
         },
       }),
     [
@@ -1038,6 +1040,7 @@ export function App({
       handleSwitchTheme,
       handleOpenBrowserTab,
       handleOpenGitIfWritable,
+      handleOpenHarnessRouter,
       handleOpenTerminalTabIfWritable,
       handleToggleBrowser,
       handleToggleSidebar,
@@ -1229,6 +1232,7 @@ export function App({
         handleOpenTreemapping={handleOpenTreemappingIfWritable}
         handleOpenWhiteboard={handleOpenWhiteboard}
         handleOpenDeveloperTools={handleOpenDeveloperTools}
+        handleOpenHarnessRouter={handleOpenHarnessRouter}
         handleOpenTerminalTab={handleOpenTerminalTabIfWritable}
         handleToggleGit={handleToggleGitIfWritable}
         handleToggleSidePane={handleToggleSidePane}

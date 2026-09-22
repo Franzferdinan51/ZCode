@@ -64,7 +64,7 @@ export interface IProviderSettingsService {
     modelId: ModelId,
     enabled: boolean,
   ): Promise<ProviderSettingsView>;
-  /** 测试已经保存并进入目标 Environment Registry 的正式 Model。 */
+  /** Tests a committed Model that is already saved into the target Environment Registry. */
   testModelConnectivity(
     input: ProviderSettingsConnectivityRequest,
   ): Promise<ModelConnectivityResult>;
@@ -95,10 +95,16 @@ export type ProviderSettingsConnectivityTester = (
 export interface IModelSelectionService {
   readonly onDidChange: Event<ModelSelectionView>;
   getView(input?: ModelSelectionViewInput): Promise<ModelSelectionView>;
+  /**
+   * Persist the default route (Harness Router). `undefined` clears it so new
+   * drafts fall back to registry order. Resolves with the refreshed view.
+   */
+  saveDefaultModelSelection(selection: ModelSelection | undefined): Promise<ModelSelectionView>;
 }
 
 export interface ModelSelectionConfiguredDefaultSource {
   read(): Promise<ModelSelection | undefined>;
+  saveDefault?(selection: ModelSelection | undefined): Promise<ModelSelection | undefined>;
   onDidChange?(listener: () => void): () => void;
 }
 
@@ -168,11 +174,13 @@ export function createProviderSettingsService(
     testModelConnectivity: async (input) => {
       await ensureReady();
       if (!testConnectivity) {
-        throw new Error("当前 Environment 未装配模型连通性测试能力");
+        throw new Error("Current Environment has no model connectivity testing wired up");
       }
       await facade.waitForProviderOperations(input.providerId);
-      // 禁用对象仍存在于配置视图，但不进入执行 Registry；不能把未发布误报成配置丢失。
-      // 只消费操作完成后的公共资格，不另查 Key、权益，也不替代目标 Environment 最终校验。
+      // Disabled entries still appear in the config view but never enter the execution
+      // Registry; do not misreport "unpublished" as "config missing". Consume only the
+      // public eligibility after the operation completes: no extra Key/entitlement
+      // lookups, and no substitute for the target Environment's final validation.
       const provider = facade
         .getView()
         .providers.find((item) => item.providerId === input.providerId);
@@ -220,9 +228,9 @@ export function createModelSelectionService(
   const listeners = new Set<(view: ModelSelectionView) => void>();
   const getView = async (input?: ModelSelectionViewInput): Promise<ModelSelectionView> => {
     await ensureReady();
-    if (disposed) throw new Error("ModelSelectionService 已 dispose");
+    if (disposed) throw new Error("ModelSelectionService disposed");
     const configuredDefault = await configuredDefaultSource?.read();
-    if (disposed) throw new Error("ModelSelectionService 已 dispose");
+    if (disposed) throw new Error("ModelSelectionService disposed");
     const base = facade.getView(configuredDefault);
     if (revision < base.revision) revision = base.revision;
     return facade.getView(configuredDefault, revision, input);
@@ -236,11 +244,12 @@ export function createModelSelectionService(
         for (const listener of listeners) listener(view);
       },
       (error: unknown) => {
-        // Registry 事件触发的异步 View 重建没有 owner；Host dispose 后它仍会继续
-        // 读取已释放的配置仓库，并形成未处理 rejection。dispose 是明确的取消边界；仅在服务
-        // 仍存活时记录真实读取失败。
+        // Async View rebuilds triggered by Registry events have no owner; after Host
+        // dispose they keep reading the released config repository and produce
+        // unhandled rejections. Dispose is the explicit cancellation boundary; log
+        // real read failures only while the service is still alive.
         if (disposed) return;
-        log.warn(undefined, `ModelSelection View 刷新失败: ${String(error)}`);
+        log.warn(undefined, `ModelSelection View refresh failed: ${String(error)}`);
       },
     );
   };
@@ -253,6 +262,18 @@ export function createModelSelectionService(
       return { dispose: () => listeners.delete(listener) };
     },
     getView,
+    saveDefaultModelSelection: async (selection) => {
+      await ensureReady();
+      if (disposed) throw new Error("ModelSelectionService disposed");
+      if (!configuredDefaultSource?.saveDefault) {
+        throw new Error("Default model selection is read-only in this host");
+      }
+      await configuredDefaultSource.saveDefault(selection);
+      // The repository write fires its own change event, but emit directly so
+      // the saved route is visible even if the event round-trip is delayed.
+      emit();
+      return getView();
+    },
     dispose() {
       if (disposed) return;
       disposed = true;

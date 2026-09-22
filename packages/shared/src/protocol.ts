@@ -97,7 +97,7 @@ export type IntegratedTerminalShellSelection =
       path: string;
     };
 
-/** 当前 host 可识别的 Windows shell 选项。 */
+/** Windows shell options the current host can recognize. */
 export interface IntegratedTerminalShellOption {
   dialect: IntegratedTerminalShellDialect;
   id: string;
@@ -106,18 +106,18 @@ export interface IntegratedTerminalShellOption {
   source: "system" | "path";
 }
 
-/** 默认语言 */
-export const DEFAULT_LOCALE: Locale = "zh-CN";
+/** Default language. This fork defaults to English; system detection still wins when available. */
+export const DEFAULT_LOCALE: Locale = "en-US";
 
 // ── Workspace / Tab ──
 
-/** 标签页唯一标识 */
+/** Unique tab identifier. */
 export type TabId = string;
 
-/** 单个标签页的状态 */
+/** State of a single tab. */
 export interface TabState {
   id: TabId;
-  /** workspace 绝对路径 */
+  /** Workspace absolute path. */
   workspacePath: string;
   /** 显示名称，通常为路径最后一段 */
   label: string;

@@ -3,6 +3,7 @@ const MIN_PREVIEW_PANE_HEAVY_CONTENT_VISIBLE_INLINE_SIZE_PX = 96;
 export type OpenTabLauncherItemId =
   | "selection-side-conversation"
   | "review"
+  | "harness-router"
   | "terminal"
   | "browser"
   | "developer-tools";
@@ -27,6 +28,8 @@ export function resolveOpenTabLauncherItemIds({
   if (!hasReviewTab) {
     itemIds.push("review");
   }
+
+  itemIds.push("harness-router");
 
   itemIds.push("terminal");
 
@@ -79,8 +82,8 @@ export function shouldRenderPreviewPaneHeavyContent({
   }
 
   if (isResizeSettling) {
-    // 原生 video/audio 进入 HTML fullscreen 时会触发 resize；如果此时卸载
-    // 媒体节点，浏览器会因 fullscreen 元素消失而立即退出全屏。
+    // Native video/audio entering HTML fullscreen fires a resize; unmounting the
+    // media node at that moment makes the browser exit fullscreen immediately.
     return isMediaPreview;
   }
 

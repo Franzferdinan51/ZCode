@@ -34,6 +34,7 @@ import {
   openWorkflowWorkspaceSidePane,
   openWorkflowArtifactSidePane,
   activateDeveloperToolsSidePane,
+  activateHarnessRouterSidePane,
   openBrowserSidePane,
   openOrActivateBrowserSidePaneByUrl,
   findBrowserSidePaneTabByUrl,
@@ -355,7 +356,7 @@ export function useAppPanels(options: {
         const activePath =
           activeTab?.type === "code-viewer" ? (activeTab.source.path ?? "none") : "none";
         logger.info(
-          `[App] 切换右侧面板 mode=code-viewer workspace=${workspaceAbsPath} title=${source.title} path=${activePath} tabs=${next.tabs.length}`,
+          `[App] toggled side pane mode=code-viewer workspace=${workspaceAbsPath} title=${source.title} path=${activePath} tabs=${next.tabs.length}`,
         );
         return next;
       });
@@ -470,7 +471,7 @@ export function useAppPanels(options: {
       }
       const nextActiveTab = getActiveSidePaneTab(next);
       logger.info(
-        `[App] 切换右侧面板 mode=${nextActiveTab?.type ?? "none"} workspace=${workspaceAbsPath} tabs=${next?.tabs.length ?? 0}`,
+        `[App] toggled side pane mode=${nextActiveTab?.type ?? "none"} workspace=${workspaceAbsPath} tabs=${next?.tabs.length ?? 0}`,
       );
       return next;
     });
@@ -713,7 +714,7 @@ export function useAppPanels(options: {
       }
       const activeTab = getActiveSidePaneTab(next);
       logger.info(
-        `[App] 切换右侧面板 mode=${activeTab?.type ?? "none"} workspace=${workspaceAbsPath} tabs=${next?.tabs.length ?? 0}`,
+        `[App] toggled side pane mode=${activeTab?.type ?? "none"} workspace=${workspaceAbsPath} tabs=${next?.tabs.length ?? 0}`,
       );
       return next;
     });
@@ -733,7 +734,7 @@ export function useAppPanels(options: {
       // 如果当前已经在 Git tab 上，toggle 会把它关掉，导致切到文件变更范围反而看不到内容。
       revealSidePaneForCurrentOwner();
       logger.info(
-        `[App] 打开右侧面板 mode=git workspace=${workspaceAbsPath} tabs=${next.tabs.length}`,
+        `[App] opened side pane mode=git workspace=${workspaceAbsPath} tabs=${next.tabs.length}`,
       );
       return next;
     });
@@ -763,7 +764,7 @@ export function useAppPanels(options: {
         title: board.name,
       });
       logger.info(
-        `[App] 打开右侧面板 mode=whiteboard workspace=${workspaceAbsPath} board=${board.id} tabs=${next.tabs.length}`,
+        `[App] opened side pane mode=whiteboard workspace=${workspaceAbsPath} board=${board.id} tabs=${next.tabs.length}`,
       );
       return next;
     });
@@ -780,7 +781,18 @@ export function useAppPanels(options: {
     commitOpenedSidePaneState((current) => {
       const next = activateDeveloperToolsSidePane(current);
       logger.info(
-        `[App] 打开右侧面板 mode=developer-tools workspace=${workspaceAbsPath} tabs=${next.tabs.length}`,
+        `[App] opened side pane mode=developer-tools workspace=${workspaceAbsPath} tabs=${next.tabs.length}`,
+      );
+      return next;
+    });
+  }, [commitOpenedSidePaneState, revealSidePaneForCurrentOwner, workspaceAbsPath]);
+
+  const handleOpenHarnessRouter = useCallback(() => {
+    revealSidePaneForCurrentOwner();
+    commitOpenedSidePaneState((current) => {
+      const next = activateHarnessRouterSidePane(current);
+      logger.info(
+        `[App] opened side pane mode=harness-router workspace=${workspaceAbsPath} tabs=${next.tabs.length}`,
       );
       return next;
     });
@@ -818,7 +830,7 @@ export function useAppPanels(options: {
       commitOpenedSidePaneState((current) => {
         const next = openModelTrajectorySidePane(current, params);
         logger.info(
-          `[App] 打开右侧面板 mode=model-trajectory workspace=${workspaceAbsPath} taskId=${params.taskId} tabs=${next.tabs.length}`,
+          `[App] opened side pane mode=model-trajectory workspace=${workspaceAbsPath} taskId=${params.taskId} tabs=${next.tabs.length}`,
         );
         return next;
       });
@@ -1576,7 +1588,7 @@ export function useAppPanels(options: {
     isSidebarVisible,
     browserNavigationRequest,
     setBrowserNavigationRequest,
-    // 回调
+    // Callbacks
     handleOpenCodeViewer,
     handleOpenCodeViewers,
     handleOpenBrowserUrl,
@@ -1587,6 +1599,7 @@ export function useAppPanels(options: {
     handleOpenTreemapping,
     handleOpenWhiteboard,
     handleOpenDeveloperTools,
+    handleOpenHarnessRouter,
     handleOpenTerminalTab,
     handleOpenModelTrajectory,
     handleOpenSubagentSession,

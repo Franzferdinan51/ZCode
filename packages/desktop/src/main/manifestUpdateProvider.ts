@@ -1,7 +1,8 @@
 import { posix } from "node:path";
-import type { CustomPublishOptions, PackageFileInfo } from "builder-util-runtime";
+import { HttpError, type CustomPublishOptions, type PackageFileInfo } from "builder-util-runtime";
 import {
   DEFAULT_ZCODE_ENDPOINT_ORIGIN,
+  isLocalUpdateManifestUrl,
   normalizeZCodeEndpointOrigin,
   type ElectronReleaseChannel,
 } from "@zcode/shared";
@@ -22,6 +23,12 @@ import { parse as parseYaml } from "yaml";
 const ELECTRON_MANIFEST_API_PATH = "/api/v1/releases/electron/manifest";
 
 const MANIFEST_ACCEPT_HEADER = "application/x-yaml,text/yaml,text/plain,*/*";
+
+// The fork publishes desktop updates only when desktop binaries ship. Until
+// our manifest asset exists, GitHub answers 404; report a below-current
+// version so electron-updater takes the normal "already up to date" path
+// instead of surfacing an error. 404 anywhere else stays loud.
+const LOCAL_MANIFEST_NOT_PUBLISHED_VERSION = "0.0.0";
 
 interface ManifestUpdateProviderOptions extends CustomPublishOptions {
   endpointOrigin?: string;
@@ -124,8 +131,9 @@ function resolveManifestUrl(pathname: string, baseUrl: URL): URL {
 }
 
 function getLinuxUpdateExtensions(updater: AppUpdater): readonly string[] | null {
-  // Linux 的实际更新器由安装包类型决定，不能把 deb/rpm/pacman 统一当作
-  // 不支持更新的产物删除；复用已有 updater 实例，避免再次读取安装类型产生分歧。
+  // The real Linux updater depends on the installed package type; deb/rpm/pacman
+  // must not be deleted as "unsupported". Reuse the existing updater instance
+  // so install-type reads cannot disagree.
   if (updater instanceof AppImageUpdater) return [".appimage"];
   if (updater instanceof DebUpdater) return [".deb"];
   if (updater instanceof RpmUpdater) return [".rpm"];
@@ -142,8 +150,9 @@ function resolveManifestFiles(
     const pathname = resolveManifestUrl(file.url, baseUrl).pathname.toLowerCase();
     return !linuxExtensions || linuxExtensions.some((extension) => pathname.endsWith(extension));
   });
-  // 缺少当前格式时，上游 findFile 会回退其他包或返回 undefined，
-  // 随后报非法缓存路径/TypeError；在解析边界失败，禁止跨安装格式更新。
+  // When the current format is missing, upstream findFile falls back to other
+  // packages or returns undefined, then fails with an illegal cache path /
+  // TypeError. Fail at the parse boundary instead: cross-format updates are forbidden.
   if (updateFiles.length === 0) {
     throw new Error(`Manifest contains no update file for ${linuxExtensions?.join(" / ")}`);
   }
@@ -153,8 +162,9 @@ function resolveManifestFiles(
     }
 
     const url = resolveManifestUrl(fileInfo.url, baseUrl);
-    // PacmanUpdater 仍用 .pacman 后缀识别缓存名，.pkg.tar.zst 会退回
-    // info.url；只给缓存提供文件名，避免完整 URL 被拼进 pending/temp-https:/...。
+    // PacmanUpdater still recognizes cache names by the .pacman suffix; .pkg.tar.zst
+    // falls back to info.url. Hand the cache a bare file name so a full URL is
+    // never spliced into pending/temp-https:/....
     const info = linuxExtensions?.includes(".pkg.tar.zst")
       ? { ...fileInfo, url: posix.basename(decodeURIComponent(url.pathname)) }
       : fileInfo;
@@ -215,12 +225,29 @@ export class ManifestUpdateProvider extends Provider<UpdateInfo> {
     this.resolveBaseUrl = new URL("/", manifestUrl);
     const releaseChannelApiValue = mapReleaseChannelToApiValue(releaseChannel);
 
-    const raw = await this.httpRequest(manifestUrl, {
-      accept: MANIFEST_ACCEPT_HEADER,
-      "X-Platform": this.releasePlatform,
-      "X-Release-Channel": releaseChannelApiValue,
-      ...(this.options.deviceMid?.trim() ? { "X-Device-Mid": this.options.deviceMid.trim() } : {}),
-    });
+    let raw: string | null;
+    try {
+      raw = await this.httpRequest(manifestUrl, {
+        accept: MANIFEST_ACCEPT_HEADER,
+        "X-Platform": this.releasePlatform,
+        "X-Release-Channel": releaseChannelApiValue,
+        ...(this.options.deviceMid?.trim()
+          ? { "X-Device-Mid": this.options.deviceMid.trim() }
+          : {}),
+      });
+    } catch (error) {
+      if (
+        error instanceof HttpError &&
+        error.statusCode === 404 &&
+        isLocalUpdateManifestUrl(manifestUrl)
+      ) {
+        return {
+          version: LOCAL_MANIFEST_NOT_PUBLISHED_VERSION,
+          zcodeReleaseChannel: releaseChannel,
+        } as UpdateInfo;
+      }
+      throw error;
+    }
     if (!raw) {
       throw new Error(`Empty electron update manifest: ${manifestUrl.toString()}`);
     }
@@ -232,9 +259,10 @@ export class ManifestUpdateProvider extends Provider<UpdateInfo> {
 
     return {
       ...(parsed as UpdateInfo),
-      // preview/stable 切换时旧 manifest 请求可能晚于新请求返回。
-      // electron-updater 的 update-available 事件默认不带请求通道，main 进程无法识别过期结果；
-      // 这里把本次请求通道随 UpdateInfo 带回去，避免旧通道覆盖更新弹窗内容。
+      // When switching preview/stable, an old manifest request may resolve after the
+      // new one. electron-updater's update-available event carries no request channel,
+      // so main cannot spot stale results; carry this request's channel back with the
+      // UpdateInfo to keep a stale channel from overwriting the update dialog.
       zcodeReleaseChannel: releaseChannel,
     } as UpdateInfo;
   }
