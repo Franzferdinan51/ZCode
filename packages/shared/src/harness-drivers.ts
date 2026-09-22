@@ -32,6 +32,12 @@ export type HarnessFrame =
 export interface HarnessArgInput {
   prompt: string;
   resumeSessionId?: string;
+  /**
+   * Registry model id for the turn. Drivers whose CLI selects models
+   * server-side (muse --model) map real ids to flags; synthetic
+   * `external-*` ids mean "CLI default" and add no flag.
+   */
+  modelId?: string;
 }
 
 export interface HarnessParser {
@@ -731,9 +737,13 @@ export const HARNESS_DRIVERS: Record<HarnessDriverId, HarnessDriver> = {
     binary: "muse",
     displayName: "Muse",
     supportsResume: true,
-    buildArgs: ({ prompt, resumeSessionId }) => {
+    buildArgs: ({ prompt, resumeSessionId, modelId }) => {
       if (!resumeSessionId) throw new Error("muse driver requires a session id");
-      return ["exec", "--json", "--session-id", resumeSessionId, prompt];
+      // Real registry model ids pass through to --model (verified live);
+      // the synthetic external-muse id keeps the CLI default.
+      const modelFlag =
+        modelId && !modelId.startsWith("external-") ? ["--model", modelId] : [];
+      return ["exec", "--json", "--session-id", resumeSessionId, ...modelFlag, prompt];
     },
     createParser: createMuseParser,
   },

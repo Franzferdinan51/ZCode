@@ -96,6 +96,22 @@ test("arg builders match each CLI's verified headless invocation", () => {
     "hi",
   ]);
   assert.throws(() => HARNESS_DRIVERS.muse.buildArgs({ prompt: "hi" }), /session id/);
+  assert.deepEqual(
+    HARNESS_DRIVERS.muse.buildArgs({ prompt: "hi", resumeSessionId: "s1" }),
+    ["exec", "--json", "--session-id", "s1", "hi"],
+  );
+  assert.deepEqual(
+    HARNESS_DRIVERS.muse.buildArgs({
+      prompt: "hi",
+      resumeSessionId: "s1",
+      modelId: "muse-spark-1.3-contributor",
+    }),
+    ["exec", "--json", "--session-id", "s1", "--model", "muse-spark-1.3-contributor", "hi"],
+  );
+  assert.deepEqual(
+    HARNESS_DRIVERS.muse.buildArgs({ prompt: "hi", resumeSessionId: "s1", modelId: "external-muse" }),
+    ["exec", "--json", "--session-id", "s1", "hi"],
+  );
   assert.deepEqual(HARNESS_DRIVERS["grok-local"].buildArgs({ prompt: "hi" }), [
     "-p",
     "hi",

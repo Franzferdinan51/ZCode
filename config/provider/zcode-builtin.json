@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": 35,
+  "revision": 36,
   "config": {
     "providerConfigRules": {
       "templateRules": [
@@ -1035,7 +1035,10 @@
               "driverId": "muse"
             },
             "builtinModelIds": [
-              "external-muse"
+              "external-muse",
+              "muse-spark-1.3",
+              "muse-spark-1.3-contributor",
+              "muse-spark-1.2"
             ]
           }
         },
@@ -6896,6 +6899,52 @@
         {
           "providerId": "external:hermes",
           "modelId": "external-hermes",
+          "config": {
+            "enabled": true,
+            "properties": {
+              "supportsToolCall": false
+            },
+            "optionSpecs": {
+              "maxOutputTokens": {
+                "map": "{}"
+              }
+            }
+          }
+        },
+        {
+          "providerId": "external:muse",
+          "modelId": "muse-spark-1.3",
+          "config": {
+            "enabled": true,
+            "properties": {
+              "supportsToolCall": false,
+              "contextWindow": 1000000
+            },
+            "optionSpecs": {
+              "maxOutputTokens": {
+                "map": "{}"
+              }
+            }
+          }
+        },
+        {
+          "providerId": "external:muse",
+          "modelId": "muse-spark-1.3-contributor",
+          "config": {
+            "enabled": true,
+            "properties": {
+              "supportsToolCall": false
+            },
+            "optionSpecs": {
+              "maxOutputTokens": {
+                "map": "{}"
+              }
+            }
+          }
+        },
+        {
+          "providerId": "external:muse",
+          "modelId": "muse-spark-1.2",
           "config": {
             "enabled": true,
             "properties": {

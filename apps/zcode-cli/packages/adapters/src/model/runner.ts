@@ -309,6 +309,7 @@ export class AiSdkModelAdapter {
     const executor = createHarnessExecutor({
       driver,
       sessions: this.harnessSessions,
+      modelId: options.modelId,
       consent: {
         isGranted: (driverId) => driverId === access.driverId && access.consentGranted === true,
       },

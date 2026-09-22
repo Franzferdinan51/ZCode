@@ -33,6 +33,8 @@ export interface HarnessExecutorOptions {
   driver: HarnessDriver;
   sessions: HarnessSessionStore;
   consent: HarnessConsent;
+  /** Registry model id; forwarded so drivers can select real CLI models. */
+  modelId?: string;
   /** Absolute binary override (e.g. user-configured install path). */
   binaryPath?: string;
   /** Spawn working directory; must be the session workspace. */
@@ -111,6 +113,7 @@ export function createHarnessExecutor(options: HarnessExecutorOptions): ModelExe
     driver,
     sessions,
     consent,
+    modelId,
     binaryPath,
     workingDirectory,
     timeoutMs = HARNESS_DEFAULT_TIMEOUT_MS,
@@ -141,9 +144,11 @@ export function createHarnessExecutor(options: HarnessExecutorOptions): ModelExe
     // Muse-style drivers need a caller-minted id; the rest resume by captured id.
     const resumeId =
       driver.id === "muse" ? sessions.getOrMint(driver.id) : sessions.get(driver.id);
-    const args = driver.buildArgs(
-      resumeId === undefined ? { prompt } : { prompt, resumeSessionId: resumeId },
-    );
+    const args = driver.buildArgs({
+      prompt,
+      ...(resumeId === undefined ? {} : { resumeSessionId: resumeId }),
+      ...(modelId === undefined ? {} : { modelId }),
+    });
     // Side-channel reports (hermes --usage-file): the CLI writes session and
     // usage JSON after the run. A broken tmp dir degrades to no report rather
     // than failing the turn; resume simply won't continue that once.
