@@ -75,6 +75,7 @@ import {
   type ZCodeSessionRuntimePreferencesScope,
   type ZCodeSessionRuntimePreferencesResult,
   type ZCodeModelContextBudgetStrategy,
+  type RagMemorySettings,
   type ZCodeProtocolTrace,
   type ZCodeSessionEvent,
   type ZCodeSessionHistoryTarget,
@@ -141,6 +142,7 @@ type ZCodeSessionRecordParams = (
 
 interface SessionStartupPreferences {
   memoryEnabled: boolean;
+  ragMemory: RagMemorySettings | undefined;
   modelContextBudgetStrategy: ZCodeModelContextBudgetStrategy;
   nativeSearchEnhancementsEnabled: boolean;
   resolveInitialBashShellSelection: () => Promise<ExecutionShellSelection | undefined>;
@@ -3233,6 +3235,7 @@ async function resolveSessionStartupPreferences(
     const inheritedShellSelection = source.parent.app.runtime.getSessionShellSelection();
     return {
       memoryEnabled: source.parent.memoryEnabled,
+      ragMemory: source.parent.ragMemory,
       modelContextBudgetStrategy: DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
       nativeSearchEnhancementsEnabled: source.parent.nativeSearchEnhancementsEnabled,
       resolveInitialBashShellSelection: async () => inheritedShellSelection,
@@ -3251,6 +3254,7 @@ async function resolveSessionStartupPreferences(
   );
   return {
     memoryEnabled: runtimePreferences.memoryEnabled,
+    ragMemory: runtimePreferences.ragMemory,
     modelContextBudgetStrategy: DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
     nativeSearchEnhancementsEnabled: runtimePreferences.nativeSearchEnhancementsEnabled,
     resolveInitialBashShellSelection: async () => {
@@ -3345,7 +3349,17 @@ async function createRecord(
       modelContextBudgetStrategy: startupPreferences.modelContextBudgetStrategy,
       // Memory Settings 是现有 CLI features.memory/use 之外的总开关。只在关闭时
       // 写入 override，避免开启值反向覆盖用户已有的 CLI 禁用配置。
-      ...(startupPreferences.memoryEnabled ? {} : { memory: { enabled: false } }),
+      // RAG 同理透传：只在开启时写入 rag 段，与 enabled 覆盖合并为一个 memory 对象。
+      ...(!startupPreferences.memoryEnabled || startupPreferences.ragMemory?.enabled
+        ? {
+            memory: {
+              ...(!startupPreferences.memoryEnabled ? { enabled: false } : {}),
+              ...(startupPreferences.ragMemory?.enabled
+                ? { rag: startupPreferences.ragMemory }
+                : {}),
+            },
+          }
+        : {}),
       // desktop-continuous session/create 由 UI 先解析 ~/.zcode-local/.agents 的 enabled MCP，
       // 但 protocol app-server 自己不会读取 UI/main 侧的 MCP store；之前 createRecord 没把
       // params.mcpServers 注入 runtimeConfig，导致日志里 runtimeHasMcpConfig=false，工具永远不启动。
@@ -3402,6 +3416,7 @@ async function createRecord(
     createdAt: now,
     eventStore,
     memoryEnabled: startupPreferences.memoryEnabled,
+    ragMemory: startupPreferences.ragMemory,
     modelContextBudgetStrategy: startupPreferences.modelContextBudgetStrategy,
     nativeSearchEnhancementsEnabled: startupPreferences.nativeSearchEnhancementsEnabled,
     ...(parentSessionId ? { parentSessionId } : {}),

@@ -1,5 +1,4 @@
 import type { ModelSelection } from "@zcode/shared";
-import { modelOptionValue } from "./app-model-ref.js";
 import type {
   DraftAttachment,
   EffortCommandSelectionState,
@@ -8,6 +7,7 @@ import type {
   SlashSelectionState,
 } from "./app-model.js";
 import { clampIndex } from "./app-selection-keyboard.js";
+import { rankModelOptions } from "./model-fuzzy.js";
 import { matchesText } from "./state.js";
 import type {
   TuiClipboardImage,
@@ -101,17 +101,11 @@ export function modelCommandQuery(draft: string): string | undefined {
 export function filterModelOptions(
   draft: string,
   models: readonly TuiModelOption[],
+  recents: readonly string[] = [],
 ): readonly TuiModelOption[] {
   const query = modelCommandQuery(draft);
   if (query === undefined) return [];
-  return models.filter((model) =>
-    matchesText(query, [
-      modelOptionValue(model),
-      model.label,
-      model.providerLabel,
-      `${MODEL_COMMAND_WITH_SPACE}${modelOptionValue(model)}`,
-    ]),
-  );
+  return rankModelOptions(models, query, recents).map((ranked) => ranked.model);
 }
 
 export function reconcileModelCommandSelection(

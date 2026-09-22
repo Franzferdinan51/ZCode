@@ -129,6 +129,7 @@ class ConfigStore {
     }
     if (config.memory) {
       if (config.memory.use !== undefined) this.set(ConfigKey.MemoryUse, config.memory.use, scope);
+      if (config.memory.rag !== undefined) this.set(ConfigKey.MemoryRag, config.memory.rag, scope);
     }
     if (config.mcp) {
       if (config.mcp.servers !== undefined)
@@ -290,6 +291,9 @@ export class ConfigPortImpl implements ConfigPort {
       },
       memory: {
         use: this.store.get(ConfigKey.MemoryUse) ?? DefaultConfig.memory.use,
+        ...(this.store.get(ConfigKey.MemoryRag) !== undefined
+          ? { rag: this.store.get(ConfigKey.MemoryRag) }
+          : {}),
       },
       mcp: {
         servers: this.store.get(ConfigKey.McpServers) ?? DefaultConfig.mcp.servers,
@@ -407,6 +411,8 @@ function getDefaultValue(key: ConfigKey): unknown {
       return defaults.features.mcp;
     case ConfigKey.MemoryUse:
       return defaults.memory.use;
+    case ConfigKey.MemoryRag:
+      return defaults.memory.rag;
     case ConfigKey.McpServers:
       return defaults.mcp.servers;
     case ConfigKey.PluginsEnabled:

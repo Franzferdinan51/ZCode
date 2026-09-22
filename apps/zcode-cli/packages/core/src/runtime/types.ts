@@ -301,9 +301,19 @@ export interface MemoryRuntimeConfig {
   enabled?: boolean;
   /** 是否调度成功 Main turn 后的自动 Extraction；缺省按 true 处理。 */
   extractionEnabled?: boolean;
+  /** 可选 RAG 后端（duckbot-rag-memory）；缺省关闭，默认 Markdown 记忆不受影响。 */
+  rag?: RagMemoryRuntimeConfig;
   storageRoot?: string;
   use?: boolean;
   workspaceIdentity?: string;
+}
+
+export interface RagMemoryRuntimeConfig {
+  enabled?: boolean;
+  repoPath?: string;
+  persistDir?: string;
+  embedding?: "auto" | "openai" | "minimax" | "lmstudio" | "local";
+  pythonPath?: string;
 }
 
 export interface AgentRuntimeDeps {

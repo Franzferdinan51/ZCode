@@ -181,6 +181,9 @@ export function resolveAppRuntimeConfig(input: {
         : { extractionEnabled: options.runtimeConfig.memory.extractionEnabled }),
       ...(input.storageRoot ? { storageRoot: input.storageRoot } : {}),
       use: options.runtimeConfig?.memory?.use ?? configResult.config.memory.use,
+      ...(options.runtimeConfig?.memory?.rag ?? configResult.config.memory.rag
+        ? { rag: options.runtimeConfig?.memory?.rag ?? configResult.config.memory.rag }
+        : {}),
       workspaceIdentity: workspaceIdentity?.trim() || undefined,
     },
   };

@@ -1860,6 +1860,18 @@ const enUS: Record<string, string> = {
   "settings.memory.workspaceMemory": "Workspace Memory",
   "settings.memoryDescription":
     "Save and reuse long-term context in workspaces. Applies to new sessions and may increase model requests and token costs.",
+  "settings.memory.ragMemory": "RAG Memory (experimental)",
+  "settings.memory.ragMemoryDescription":
+    "Recall from a local duckbot-rag-memory store (ChromaDB) alongside or instead of workspace memory. Needs a Python checkout plus embeddings; applies to new sessions.",
+  "settings.memory.ragRepoPath": "Repository path",
+  "settings.memory.ragRepoPathDescription":
+    "duckbot-rag-memory checkout directory (runs python -m src.mcp_server here).",
+  "settings.memory.ragPersistDir": "Data directory",
+  "settings.memory.ragPersistDirDescription":
+    "Chroma store directory. Empty uses the default under the app data directory.",
+  "settings.memory.ragEmbedding": "Embeddings",
+  "settings.memory.ragEmbeddingDescription":
+    "Auto prefers API keys, then LM Studio, then a local model (downloads weights).",
   "settings.memory.viewer.disabled": "Enable Workspace Memory to view saved memories.",
   "settings.memory.viewer.localOnly":
     "Memory details are available only in the local desktop app. Open Memory settings there to view them.",

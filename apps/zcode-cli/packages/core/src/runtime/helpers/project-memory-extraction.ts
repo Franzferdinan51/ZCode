@@ -7,6 +7,10 @@ import {
 } from "../../memory/extraction.js";
 import { runMemoryAgentLoop } from "../../memory/memory-agent-loop.js";
 import { scanMemoryManifest } from "../../memory/recall/index.js";
+import { resolveProjectMemoryRoot } from "../../memory/project-root.js";
+import { isRagMemoryConfigured } from "../../memory/rag-memory-client.js";
+import { mirrorMemoryRootToRag } from "../../memory/rag-memory-mirror.js";
+import { resolveRagMemoryConfig } from "../../memory/rag-memory-section.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import {
   buildProjectMemoryAgentProviderMessages,
@@ -38,12 +42,25 @@ export function scheduleProjectMemoryExtraction(
   if (runtime.config.memory?.extractionEnabled === false) return;
   // Bash cd 只改变执行 cwd，project Memory 身份必须继续使用会话 workspace root。
   const memoryRoot = resolveEnabledProjectMemoryRoot(runtime.config, runtime.workspaceRoot);
-  if (!memoryRoot) return;
+  // RAG-only mode: default Markdown memory is off but RAG is on — extract
+  // into the same project root shape (facts still land as .md, then mirror
+  // to RAG). The loop is file-conservative; the mirror dedupes by hash.
+  const ragConfig = resolveRagMemoryConfig(runtime.config.memory?.rag);
+  const ragStagingRoot =
+    !memoryRoot && ragConfig && isRagMemoryConfigured(ragConfig) && runtime.config.memory?.cliStorageRoot
+      ? resolveProjectMemoryRoot({
+          cliStorageRoot: runtime.config.memory.cliStorageRoot,
+          workspaceIdentity: runtime.config.memory.workspaceIdentity,
+          workspacePath: runtime.workspaceRoot,
+        })
+      : undefined;
+  const effectiveRoot = memoryRoot ?? ragStagingRoot;
+  if (!effectiveRoot) return;
   if (runtime.isRemoteWorkspace()) return;
   if (!runtime.sessionStore || !runtime.fileSystemPort) return;
 
   const snapshotBase = captureProjectMemoryAgentContext(runtime, {
-    memoryRoot,
+    memoryRoot: effectiveRoot,
     model: input.model,
     operation: "project_memory_extract",
     traceContext: input.traceContext,
@@ -160,6 +177,13 @@ async function executeProjectMemoryExtraction(
         workingDirectory: input.snapshot.workingDirectory,
         workspaceRoot: input.snapshot.workspaceRoot,
       });
+      // Optional RAG mirror: new fact files are remembered server-side.
+      // Fail-soft and invisible when RAG is off.
+      await mirrorMemoryRootToRag({
+        memoryRoot: input.snapshot.memoryRoot,
+        rag: runtime.config.memory?.rag,
+        sourceTag: "zcode-memory",
+      }).catch(() => undefined);
       telemetry.finishCompleted();
       return "success" as const;
     } catch (error) {

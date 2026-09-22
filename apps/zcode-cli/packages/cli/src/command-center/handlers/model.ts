@@ -96,17 +96,41 @@ function formatModelList(current: string | undefined, options: CommandCenterMode
     return `${currentLine}\nNo selectable models are configured.`;
   }
 
-  const lines = options.map((option) => {
-    const id = `${option.ref.providerId}/${option.ref.modelId}`;
+  const groups = new Map<string, CommandCenterModelOption[]>();
+  for (const option of options) {
     const provider = option.providerLabel ?? option.ref.providerId;
-    const disabled = option.disabledReason ? ` — ${option.disabledReason}` : "";
-    return `- ${id} (${option.label}; ${provider})${disabled}`;
-  });
+    const group = groups.get(provider);
+    if (group) group.push(option);
+    else groups.set(provider, [option]);
+  }
+  const lines: string[] = [];
+  for (const [provider, group] of groups) {
+    lines.push(`${provider}:`);
+    for (const option of group) {
+      const id = `${option.ref.providerId}/${option.ref.modelId}`;
+      const marker = id === current ? " (current)" : "";
+      const specs: string[] = [];
+      if (typeof option.contextWindow === "number" && option.contextWindow > 0) {
+        specs.push(formatListContextWindow(option.contextWindow));
+      }
+      if (option.reasoning) specs.push("reasons");
+      const detail = option.description?.trim() ? ` — ${option.description.trim()}` : "";
+      const disabled = option.disabledReason ? ` [disabled: ${option.disabledReason}]` : "";
+      const specText = specs.length > 0 ? ` [${specs.join(", ")}]` : "";
+      lines.push(`  - ${id}${marker}${specText}${detail}${disabled}`);
+    }
+  }
 
   return [
     currentLine,
-    "Available models:",
+    `Available models (${options.length}):`,
     ...lines,
     "Use /model <provider/model> to select a model, then /effort <level> to change reasoning effort.",
   ].join("\n");
+}
+
+function formatListContextWindow(window: number): string {
+  if (window >= 1_000_000) return `${Math.round((window / 1_000_000) * 10) / 10}M ctx`;
+  if (window >= 1_000) return `${Math.round(window / 1_000)}k ctx`;
+  return `${window} ctx`;
 }

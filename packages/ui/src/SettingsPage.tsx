@@ -658,6 +658,7 @@ export function SettingsPage({
     return [...names];
   }, [sharedSettings?.recentProjects, workspaceTabs]);
   const memoryEnabled = sharedSettings?.memoryEnabled === true;
+  const ragMemorySettings = sharedSettings?.ragMemory;
   const nativeSearchEnhancementsEnabled = sharedSettings?.nativeSearchEnhancementsEnabled !== false;
   const askUserQuestionAutoResolutionEnabled =
     sharedSettings?.askUserQuestionAutoResolutionEnabled !== false;
@@ -924,6 +925,22 @@ export function SettingsPage({
       });
     },
     [updateSharedSettings],
+  );
+  const handleRagMemoryChange = useCallback(
+    async (patch: Partial<NonNullable<AppSettings["ragMemory"]>>) => {
+      await runSettingsActionAsync({
+        featureId: "settings.memory",
+        action: "update_rag_memory",
+        trigger: "input",
+        operation: async () => {
+          await updateSharedSettings({
+            ragMemory: { ...ragMemorySettings, ...patch },
+          });
+        },
+        completed: { resultSource: "shared_settings" },
+      });
+    },
+    [ragMemorySettings, updateSharedSettings],
   );
   const handleHttpProxyChange = useCallback(
     async (proxy: string) => {
@@ -1803,7 +1820,9 @@ export function SettingsPage({
                               memoryEnabled={memoryEnabled}
                               memoryService={localHostServices.memoryService}
                               onMemoryEnabledChange={handleMemoryEnabledChange}
+                              onRagMemoryChange={handleRagMemoryChange}
                               projectMemoryViewerAvailable={Boolean(isDesktop)}
+                              ragMemory={ragMemorySettings}
                               workspaceDisplayNames={memoryWorkspaceDisplayNames}
                             />
                           </ServiceProvider>

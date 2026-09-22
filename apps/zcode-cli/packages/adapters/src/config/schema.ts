@@ -39,8 +39,19 @@ const featuresSchema = z.object({
   mcp: z.boolean().optional(),
 });
 
+const memoryRagSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    repoPath: z.string().min(1).optional(),
+    persistDir: z.string().min(1).optional(),
+    embedding: z.enum(["auto", "openai", "minimax", "lmstudio", "local"]).optional(),
+    pythonPath: z.string().min(1).optional(),
+  })
+  .strict();
+
 const memorySchema = z.object({
   use: z.boolean().optional(),
+  rag: memoryRagSchema.optional(),
 });
 
 const mcpServerBaseSchema = {

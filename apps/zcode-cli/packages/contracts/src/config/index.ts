@@ -39,6 +39,7 @@ export const ConfigKey = {
 
   // Memory
   MemoryUse: "memory.use",
+  MemoryRag: "memory.rag",
 
   // MCP
   McpServers: "mcp.servers",
@@ -114,6 +115,8 @@ export type ConfigValue<K extends ConfigKey> = K extends "modelStream.idleTimeou
               ? boolean
               : K extends "memory.use"
                 ? boolean
+                : K extends "memory.rag"
+                  ? MemoryRagFileConfig | undefined
                 : K extends "skills.metadataBudget"
                   ? number
                   : K extends "skills.roots"
@@ -199,6 +202,15 @@ export interface SkillCommandOverride {
 // Runtime Config
 // ============================================================
 
+/** Optional duckbot-rag-memory backend file config (memory.rag). */
+export interface MemoryRagFileConfig {
+  enabled?: boolean;
+  repoPath?: string;
+  persistDir?: string;
+  embedding?: "auto" | "openai" | "minimax" | "lmstudio" | "local";
+  pythonPath?: string;
+}
+
 export interface RuntimeConfig {
   modelStream: ModelStreamConfig;
   permission: {
@@ -228,6 +240,7 @@ export interface RuntimeConfig {
   };
   memory: {
     use: boolean;
+    rag?: MemoryRagFileConfig;
   };
   mcp: {
     servers: Record<string, McpServerConfig>;

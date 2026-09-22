@@ -48,7 +48,9 @@ export {
   appSettingsSchema,
   localeSchema,
   postUpdateReleaseNotesPayloadSchema,
+  ragMemorySettingsSchema,
 } from "./validationAppSettings.js";
+export type { RagMemorySettings } from "./validationAppSettings.js";
 
 export function formatZodError(error: z.ZodError): string {
   return error.issues

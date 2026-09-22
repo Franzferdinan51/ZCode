@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type IMemoryService, type ProjectMemoryWorkspaceSummary } from "@zcode/services";
-import { TID_SETTINGS_MEMORY_SWITCH } from "@zcode/shared";
+import { TID_SETTINGS_MEMORY_SWITCH, type AppSettings } from "@zcode/shared";
 import { runUserAction, runUserActionAsync } from "@/lib/userActionTelemetry.js";
+import { Input } from "@/components/ui/input.js";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.js";
 import { Switch } from "@/components/ui/switch.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import {
@@ -43,17 +51,25 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+type RagMemoryForm = NonNullable<AppSettings["ragMemory"]>;
+
+const RAG_EMBEDDING_OPTIONS = ["auto", "openai", "minimax", "lmstudio", "local"] as const;
+
 export function MemorySettingsSection({
   memoryEnabled,
   memoryService,
   onMemoryEnabledChange,
+  onRagMemoryChange,
   projectMemoryViewerAvailable,
+  ragMemory,
   workspaceDisplayNames = [],
 }: {
   memoryEnabled: boolean;
   memoryService: MemoryCatalogService;
   onMemoryEnabledChange: (enabled: boolean) => Promise<void>;
+  onRagMemoryChange: (patch: Partial<RagMemoryForm>) => Promise<void>;
   projectMemoryViewerAvailable: boolean;
+  ragMemory: RagMemoryForm | undefined;
   workspaceDisplayNames?: readonly string[];
 }) {
   const { intl } = useZCodeIntl();
@@ -174,6 +190,79 @@ export function MemorySettingsSection({
             />
           }
         />
+      </SettingsGroupCard>
+
+      <SettingsGroupCard>
+        <SettingsRow
+          label={intl.formatMessage({ id: "settings.memory.ragMemory" })}
+          description={intl.formatMessage({ id: "settings.memory.ragMemoryDescription" })}
+          control={
+            <Switch
+              aria-label={intl.formatMessage({ id: "settings.memory.ragMemory" })}
+              checked={ragMemory?.enabled === true}
+              onCheckedChange={(checked) => {
+                void onRagMemoryChange({ enabled: checked });
+              }}
+            />
+          }
+        />
+        {ragMemory?.enabled === true ? (
+          <>
+            <SettingsRow
+              label={intl.formatMessage({ id: "settings.memory.ragRepoPath" })}
+              description={intl.formatMessage({ id: "settings.memory.ragRepoPathDescription" })}
+              control={
+                <Input
+                  value={ragMemory.repoPath ?? ""}
+                  placeholder="~/duckbot-rag-memory"
+                  onChange={(event) => {
+                    void onRagMemoryChange({ repoPath: event.target.value });
+                  }}
+                  className="w-[320px]"
+                />
+              }
+            />
+            <SettingsRow
+              label={intl.formatMessage({ id: "settings.memory.ragPersistDir" })}
+              description={intl.formatMessage({ id: "settings.memory.ragPersistDirDescription" })}
+              control={
+                <Input
+                  value={ragMemory.persistDir ?? ""}
+                  placeholder="default"
+                  onChange={(event) => {
+                    void onRagMemoryChange({ persistDir: event.target.value });
+                  }}
+                  className="w-[320px]"
+                />
+              }
+            />
+            <SettingsRow
+              label={intl.formatMessage({ id: "settings.memory.ragEmbedding" })}
+              description={intl.formatMessage({ id: "settings.memory.ragEmbeddingDescription" })}
+              control={
+                <Select
+                  value={ragMemory.embedding ?? "auto"}
+                  onValueChange={(value) =>
+                    void onRagMemoryChange({
+                      embedding: value as RagMemoryForm["embedding"],
+                    })
+                  }
+                >
+                  <SelectTrigger size="lg" className="w-[200px] min-w-0 justify-between">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RAG_EMBEDDING_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              }
+            />
+          </>
+        ) : null}
       </SettingsGroupCard>
 
       {!projectMemoryViewerAvailable ? (

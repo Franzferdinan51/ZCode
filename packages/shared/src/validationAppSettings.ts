@@ -42,6 +42,24 @@ const desktopWindowSizeSchema = z.object({
   height: z.number().int().min(640),
   maximized: z.boolean(),
 });
+/**
+ * Optional duckbot-rag-memory backend (local-first ChromaDB RAG). Off by
+ * default; when enabled it augments (or substitutes, when the Markdown
+ * memory is off) session context via a local MCP sidecar. No hosted calls
+ * unless the user picks an API embedding provider.
+ */
+export const ragMemorySettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  /** Checkout dir of duckbot-rag-memory (`python -m src.mcp_server` runs here). */
+  repoPath: z.string().trim().min(1).optional(),
+  /** Chroma persist dir (DUCKBOT_CHROMA_DIR). Default: <dataRoot>/rag-memory. */
+  persistDir: z.string().trim().min(1).optional(),
+  /** Embedding provider override (DUCKBOT_EMBEDDING). Default: auto-detect. */
+  embedding: z.enum(["auto", "openai", "minimax", "lmstudio", "local"]).default("auto"),
+  pythonPath: z.string().trim().min(1).optional(),
+});
+export type RagMemorySettings = z.infer<typeof ragMemorySettingsSchema>;
+
 export const integratedTerminalShellSelectionSchema = z.discriminatedUnion("mode", [
   z.object({
     mode: z.literal("auto"),
@@ -462,6 +480,7 @@ const appSettingsObjectSchema = z.object({
   onboardingOccupation: appSettingsOccupationSchema.nullish(),
   proactiveSuggestionsEnabled: z.boolean().optional(),
   memoryEnabled: z.boolean().default(false),
+  ragMemory: ragMemorySettingsSchema.optional(),
   lastWorkspaceSession: z.array(appWorkspaceSessionEntrySchema).default([]),
   lastActiveTabIndex: z.number().int().nonnegative().default(0),
   lastActiveTaskByWorkspace: z.record(z.string(), z.string()).optional(),
@@ -547,6 +566,7 @@ export const appSettingsPatchSchema = z.object({
     .nullish(),
   proactiveSuggestionsEnabled: z.boolean().optional(),
   memoryEnabled: z.boolean().optional(),
+  ragMemory: ragMemorySettingsSchema.optional(),
   lastWorkspaceSession: z.array(appWorkspaceSessionEntrySchema).optional(),
   lastActiveTabIndex: z.number().int().nonnegative().optional(),
   lastActiveTaskByWorkspace: z.record(z.string(), z.string()).optional(),

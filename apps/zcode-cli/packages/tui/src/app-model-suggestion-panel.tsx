@@ -3,6 +3,7 @@ import { visibleModelOptionWindow } from "./app-input.js";
 import { palette } from "./app-model.js";
 import { modelOptionValue } from "./app-model-ref.js";
 import { displayWidth, truncateDisplay } from "./app-terminal-width.js";
+import { highlightRangesForRowText, type FuzzyMatchRange } from "./model-fuzzy.js";
 import type { TuiModelOption } from "./types.js";
 
 const h = React.createElement as (
@@ -38,34 +39,41 @@ export function ModelSuggestionPanel({
   contentWidth,
   currentModel,
   models,
+  query,
   selectedIndex,
 }: {
   contentWidth?: number;
   currentModel: string;
   models: readonly TuiModelOption[];
+  query: string;
   selectedIndex: number;
 }): React.ReactElement | null {
   const visible = visibleModelOptionWindow(models, selectedIndex, MODEL_OPTION_VISIBLE_COUNT);
   const rowContentWidth = normalizeModelRowContentWidth(contentWidth);
   const rows =
     visible.models.length > 0
-      ? visible.models.map((model, index) => ({
-          current: modelOptionValue(model) === currentModel,
-          fitted: fitModelOptionRow(
+      ? visible.models.map((model, index) => {
+          const fitted = fitModelOptionRow(
             modelOptionDisplayParts(model, modelOptionValue(model) === currentModel),
             rowContentWidth,
-          ),
-          model,
-          selected: index === visible.selectedIndex,
-        }))
+          );
+          return {
+            fitted,
+            highlights: highlightRangesForRowText(fitted.model, query),
+            model,
+            selected: index === visible.selectedIndex,
+          };
+        })
       : [];
   const panelHeight =
     MODEL_OPTION_PANEL_CHROME_ROWS + Math.max(1, rows.length) * MODEL_OPTION_ROW_HEIGHT;
 
+  const position =
+    rows.length > 0 ? visible.startIndex + visible.selectedIndex + 1 : 0;
   return h(
     "box",
     {
-      title: "Models",
+      title: rows.length > 0 ? `Models (${position}/${models.length})` : "Models",
       style: {
         backgroundColor: palette.panel,
         border: true,
@@ -83,6 +91,7 @@ export function ModelSuggestionPanel({
           h(ModelSuggestionRow, {
             key: JSON.stringify(row.model.ref),
             fitted: row.fitted,
+            highlights: row.highlights,
             selected: row.selected,
           }),
         )
@@ -102,9 +111,11 @@ export function ModelSuggestionPanel({
 
 function ModelSuggestionRow({
   fitted,
+  highlights,
   selected,
 }: {
   fitted: FittedModelOptionRow;
+  highlights: readonly FuzzyMatchRange[];
   selected: boolean;
 }): React.ReactElement {
   return h(
@@ -129,15 +140,31 @@ function ModelSuggestionRow({
       selected ? "> " : "  ",
     ),
     h(
-      "text",
+      "box",
       {
         style: {
-          fg: selected ? palette.accent : palette.text,
+          flexDirection: "row",
           flexShrink: 1,
           minWidth: 1,
         },
       },
-      fitted.model,
+      ...modelTextSegments(fitted.model, highlights).map((segment, index) =>
+        h(
+          "text",
+          {
+            key: index,
+            style: {
+              fg: segment.highlighted
+                ? palette.success
+                : selected
+                  ? palette.accent
+                  : palette.text,
+              flexShrink: 1,
+            },
+          },
+          segment.text,
+        ),
+      ),
     ),
     fitted.meta
       ? h(
@@ -175,12 +202,44 @@ function ModelSuggestionRow({
 
 function modelOptionDisplayParts(model: TuiModelOption, current: boolean): ModelOptionDisplayParts {
   const modelName = model.label || model.ref.modelId;
-  const meta = [model.disabledReason, current ? "current" : undefined].filter(Boolean).join(" | ");
+  const specs: string[] = [];
+  if (typeof model.contextWindow === "number" && model.contextWindow > 0) {
+    specs.push(formatContextWindow(model.contextWindow));
+  }
+  if (model.reasoning) specs.push("reasons");
+  const meta = [model.disabledReason, current ? "current" : undefined, ...specs]
+    .filter(Boolean)
+    .join(" | ");
+  const description = model.description?.trim();
   return {
     meta,
-    model: modelName,
+    model: description ? `${modelName} — ${description}` : modelName,
     provider: model.providerLabel || model.ref.providerId,
   };
+}
+
+function formatContextWindow(window: number): string {
+  if (window >= 1_000_000) return `${Math.round((window / 1_000_000) * 10) / 10}M ctx`;
+  if (window >= 1_000) return `${Math.round(window / 1_000)}k ctx`;
+  return `${window} ctx`;
+}
+
+function modelTextSegments(
+  text: string,
+  highlights: readonly FuzzyMatchRange[],
+): Array<{ text: string; highlighted: boolean }> {
+  if (highlights.length === 0) return [{ text, highlighted: false }];
+  const segments: Array<{ text: string; highlighted: boolean }> = [];
+  let cursor = 0;
+  for (const range of highlights) {
+    const start = Math.max(0, Math.min(range.start, text.length));
+    const end = Math.max(start, Math.min(range.end, text.length));
+    if (start > cursor) segments.push({ text: text.slice(cursor, start), highlighted: false });
+    if (end > start) segments.push({ text: text.slice(start, end), highlighted: true });
+    cursor = Math.max(cursor, end);
+  }
+  if (cursor < text.length) segments.push({ text: text.slice(cursor), highlighted: false });
+  return segments.filter((segment) => segment.text.length > 0);
 }
 
 function fitModelOptionRow(

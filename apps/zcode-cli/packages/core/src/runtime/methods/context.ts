@@ -17,6 +17,7 @@ import type {
 import type { AgentRuntimeInternal } from "../internal.js";
 import { ensureMemoryDirectoryExists } from "../../memory/directory.js";
 import { formatProjectMemoryIndexContent } from "../../memory/index-content.js";
+import { loadRagMemoryOrientationSection } from "../../memory/rag-memory-section.js";
 import {
   createReadFileStateKey,
   normalizeReadFileStateMtimeMs,
@@ -65,6 +66,14 @@ export async function ensureContextInitialized(
   this.skillLoadOutcome = await this.discoverSkillsForContext(traceContext);
   this.memoryRoot = await this.loadProjectMemoryRoot(traceContext);
   this.memoryIndexContent = await loadProjectMemoryIndexContent(this, this.memoryRoot);
+  // Optional RAG orientation: one bounded recall, appended with a clear
+  // delimiter. Fail-soft — never blocks init or disturbs default memory.
+  const ragOrientation = await loadRagMemoryOrientationSection(this.config.memory?.rag);
+  if (ragOrientation) {
+    this.memoryIndexContent = this.memoryIndexContent
+      ? `${this.memoryIndexContent}\n\n${ragOrientation}`
+      : ragOrientation;
+  }
   this.contextBuilder = this.createContextBuilderFromSnapshot(snapshot, this.memoryRoot, {
     memoryIndexContent: this.memoryIndexContent,
     model,

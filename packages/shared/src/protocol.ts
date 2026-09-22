@@ -323,6 +323,14 @@ export interface AppSettings {
   nativeSearchEnhancementsEnabled?: boolean;
   /** 新建或冷恢复 Session 是否启用 Memory；默认关闭。 */
   memoryEnabled?: boolean;
+  /** 可选 duckbot-rag-memory 后端；默认关闭，启用后与 Markdown 记忆并存或替代。 */
+  ragMemory?: {
+    enabled?: boolean;
+    repoPath?: string;
+    persistDir?: string;
+    embedding?: "auto" | "openai" | "minimax" | "lmstudio" | "local";
+    pythonPath?: string;
+  };
   onboardingOccupation?:
     | "office"
     | "developer"

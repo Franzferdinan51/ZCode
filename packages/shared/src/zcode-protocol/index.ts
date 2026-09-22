@@ -35,7 +35,10 @@ import {
   browserSessionContextKindSchema,
 } from "../browser-use/backend.js";
 import { browserCommandResultSchema } from "../browser-use/result.js";
-import { integratedTerminalShellSelectionSchema } from "../validationAppSettings.js";
+import {
+  integratedTerminalShellSelectionSchema,
+  ragMemorySettingsSchema,
+} from "../validationAppSettings.js";
 import { zcodeTaskModeSchema } from "../zcode-task-mode-schema.js";
 import { OFFICIAL_MCP_AUTH_PORT_FAILURE_REASONS } from "../official-mcp-auth.js";
 import {
@@ -1703,6 +1706,7 @@ export const zcodeSessionRuntimePreferencesResultSchema = z
   .object({
     nativeSearchEnhancementsEnabled: z.boolean(),
     memoryEnabled: z.boolean().default(false),
+    ragMemory: ragMemorySettingsSchema.optional(),
     askUserQuestionAutoResolutionEnabled: z.boolean().default(true),
     integratedTerminalShell: integratedTerminalShellSelectionSchema.optional(),
     // 兼容旧 Host：缺少字段时在协议解析边界使用当前默认策略。

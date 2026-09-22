@@ -1758,6 +1758,16 @@ const zhCN: Record<string, string> = {
   "settings.memory.workspaceMemory": "工作区记忆",
   "settings.memoryDescription":
     "在工作区中保存并复用长期上下文，新会话生效。开启后可能增加模型调用和 Token 成本。",
+  "settings.memory.ragMemory": "RAG 记忆（实验性）",
+  "settings.memory.ragMemoryDescription":
+    "从本地 duckbot-rag-memory 存储（ChromaDB）召回，可与工作区记忆并存或替代。需要 Python 检出与嵌入模型；新会话生效。",
+  "settings.memory.ragRepoPath": "仓库路径",
+  "settings.memory.ragRepoPathDescription":
+    "duckbot-rag-memory 检出目录（在此运行 python -m src.mcp_server）。",
+  "settings.memory.ragPersistDir": "数据目录",
+  "settings.memory.ragPersistDirDescription": "Chroma 存储目录，留空则使用应用数据目录下的默认位置。",
+  "settings.memory.ragEmbedding": "嵌入模型",
+  "settings.memory.ragEmbeddingDescription": "自动模式优先 API Key，其次 LM Studio，最后本地模型（需下载权重）。",
   "settings.memory.viewer.localOnly":
     "记忆详情仅支持在本地桌面端查看，请前往本地桌面端的“记忆”设置。",
   "settings.memory.viewer.title": "已保存的工作区记忆",

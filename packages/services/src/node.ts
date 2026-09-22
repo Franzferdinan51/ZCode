@@ -2238,6 +2238,23 @@ export function createLocalServices(options: {
                 settings.askUserQuestionAutoResolutionEnabled !== false,
               nativeSearchEnhancementsEnabled: settings.nativeSearchEnhancementsEnabled !== false,
               memoryEnabled: settings.memoryEnabled === true,
+              ...(settings.ragMemory
+                ? {
+                    ragMemory: {
+                      enabled: settings.ragMemory.enabled === true,
+                      embedding: settings.ragMemory.embedding ?? "auto",
+                      ...(settings.ragMemory.repoPath
+                        ? { repoPath: settings.ragMemory.repoPath }
+                        : {}),
+                      ...(settings.ragMemory.persistDir
+                        ? { persistDir: settings.ragMemory.persistDir }
+                        : {}),
+                      ...(settings.ragMemory.pythonPath
+                        ? { pythonPath: settings.ragMemory.pythonPath }
+                        : {}),
+                    },
+                  }
+                : {}),
               modelContextBudgetStrategy,
               // user-execution 只消费 Shell；共享默认策略是统一 result schema 的兼容占位，
               // 不会覆盖 runtime-materialization 阶段已经固定的 strategy。

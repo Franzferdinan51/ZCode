@@ -6,7 +6,10 @@ import {
   selectedModelOption,
 } from "./app-input.js";
 import type { ModelCommandSelectionState } from "./app-model.js";
+import { modelOptionValue } from "./app-model-ref.js";
 import type { TuiModelOption, TuiOptions } from "./types.js";
+
+const MODEL_RECENT_PICKS_LIMIT = 8;
 
 export function useModelCommandController(
   draft: string,
@@ -24,6 +27,10 @@ export function useModelCommandController(
   );
   const listModelOptions = options.listModelOptions;
   const [selection, setSelection] = React.useState<ModelCommandSelectionState | undefined>();
+  const selectionRef = React.useRef(selection);
+  selectionRef.current = selection;
+  // Session-local recency: picks made this session float to the top.
+  const recentsRef = React.useRef<readonly string[]>([]);
   const active = modelCommandQuery(draft) !== undefined;
   React.useEffect(() => {
     if (!active || !listModelOptions) return;
@@ -43,20 +50,56 @@ export function useModelCommandController(
       active && modelOptions.length > 0 ? (current ?? { selectedIndex: 0 }) : undefined,
     );
   }, [active, modelOptions]);
+  // Bump to recompute the ranked list when session recency changes.
+  const [recentsVersion, setRecentsVersion] = React.useState(0);
   const filteredOptions = React.useMemo(
-    () => filterModelOptions(draft, modelOptions),
-    [draft, modelOptions],
+    () => filterModelOptions(draft, modelOptions, recentsRef.current),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recentsVersion stands in for the ref.
+    [draft, modelOptions, recentsVersion],
   );
   const reconcileDraft = React.useCallback(
     (value: string) => {
       const nextSelection = reconcileModelCommandSelection(value, modelOptions);
+      if (nextSelection) {
+        // Carry the highlighted option across keystrokes when it survives
+        // the new filter instead of snapping back to the top row.
+        const current = selectionRef.current;
+        if (current) {
+          const previous = selectedModelOption(
+            draft,
+            current,
+            filterModelOptions(draft, modelOptions, recentsRef.current),
+          );
+          if (previous) {
+            const carried = filterModelOptions(value, modelOptions, recentsRef.current).findIndex(
+              (option) => modelOptionValue(option) === modelOptionValue(previous),
+            );
+            if (carried >= 0) {
+              const carriedSelection = { selectedIndex: carried };
+              setSelection(carriedSelection);
+              return carriedSelection;
+            }
+          }
+        }
+      }
       setSelection(nextSelection);
       return nextSelection;
     },
-    [modelOptions],
+    [draft, modelOptions],
   );
   const selectedOption = React.useCallback(
-    (submittedValue: string) => selectedModelOption(submittedValue, selection, filteredOptions),
+    (submittedValue: string) => {
+      const picked = selectedModelOption(submittedValue, selection, filteredOptions);
+      if (picked) {
+        const value = modelOptionValue(picked);
+        recentsRef.current = [value, ...recentsRef.current.filter((entry) => entry !== value)].slice(
+          0,
+          MODEL_RECENT_PICKS_LIMIT,
+        );
+        setRecentsVersion((version) => version + 1);
+      }
+      return picked;
+    },
     [filteredOptions, selection],
   );
 

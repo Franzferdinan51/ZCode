@@ -12,6 +12,7 @@ import { ContentPane } from "./app-transcript-components.js";
 import { FileMentionPanel } from "./app-file-mention-panel.js";
 import type { FileMentionState } from "./app-file-mentions.js";
 import { EffortSuggestionPanel } from "./app-effort-suggestion-panel.js";
+import { modelCommandQuery } from "./app-input.js";
 import { InputPane, type PromptInputEditor } from "./app-input-pane.js";
 import { InputActiveStatus } from "./app-input-status.js";
 import { QueuedInputPanel } from "./app-queued-inputs.js";
@@ -281,6 +282,7 @@ function ComposerInputArea(props: {
           contentWidth: props.contentWidth,
           currentModel: props.model,
           models: props.modelOptions,
+          query: modelCommandQuery(props.draft) ?? "",
           selectedIndex: props.modelSelection.selectedIndex,
         })
       : null,

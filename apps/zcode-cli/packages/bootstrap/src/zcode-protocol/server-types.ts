@@ -18,6 +18,7 @@ import {
   type ZCodeDeliveryKind,
   type ModelSelection,
   type ZCodeModelContextBudgetStrategy,
+  type RagMemorySettings,
   type ZCodeProtocolMessage,
   type ZCodeProtocolMethod,
   type ZCodeProtocolNotification,
@@ -82,6 +83,7 @@ export interface ZCodeProtocolToolInputTransmissionState {
 export interface ZCodeProtocolSessionRecord {
   app: ZCodeApp;
   memoryEnabled: boolean;
+  ragMemory: RagMemorySettings | undefined;
   nativeSearchEnhancementsEnabled: boolean;
   modelContextBudgetStrategy: ZCodeModelContextBudgetStrategy;
   createdAt: number;
