@@ -294,9 +294,16 @@ export function useZCodeTaskService(
   workspaceIdentity?: string | null,
 ): IZCodeTaskService {
   // ZCode task 服务按 workspace 身份解析，保证所有 task RPC 都落到对应的 host。
-  const services = workspacePath
-    ? useWorkspaceServices(workspacePath, preferredRemoteSessionId, workspaceIdentity)
-    : useServices();
+  // Both hooks must run on every render: workspacePath resolves asynchronously,
+  // and branching hook calls on it shifts the hook order between renders,
+  // crashing React with "change in the order of Hooks".
+  const scopedServices = useWorkspaceServices(
+    workspacePath,
+    preferredRemoteSessionId,
+    workspaceIdentity,
+  );
+  const contextServices = useServices();
+  const services = workspacePath ? scopedServices : contextServices;
   const rawService = services.zcodeTaskService;
   if (!rawService || typeof rawService !== "object") {
     return rawService;

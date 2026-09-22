@@ -7,8 +7,14 @@ export function useZCodeSessionService(
   preferredRemoteSessionId?: string | null,
   workspaceIdentity?: string | null,
 ): IZCodeSessionService {
-  const services = workspacePath
-    ? useWorkspaceServices(workspacePath, preferredRemoteSessionId, workspaceIdentity)
-    : useServices();
-  return services.zcodeSessionService;
+  // Both hooks must run on every render: workspacePath resolves asynchronously,
+  // and branching hook calls on it shifts the hook order between renders,
+  // crashing React with "change in the order of Hooks".
+  const scopedServices = useWorkspaceServices(
+    workspacePath,
+    preferredRemoteSessionId,
+    workspaceIdentity,
+  );
+  const contextServices = useServices();
+  return (workspacePath ? scopedServices : contextServices).zcodeSessionService;
 }
