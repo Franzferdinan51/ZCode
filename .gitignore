@@ -39,6 +39,7 @@ packages/stream-animate/.stream-animate-data/
 # 集成分支曾混入 node-gyp 构建产物与 .playwright-mcp 临时快照；
 # 入库由 scripts/ci/ci-repo-hygiene.mjs 在 CI 第一站拒绝，这里让本地 git add 也忽略它们。
 .playwright-mcp/
+.playwright-cli/
 *.o
 .deps/
 obj.target/
