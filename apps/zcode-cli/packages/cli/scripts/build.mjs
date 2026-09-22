@@ -197,6 +197,12 @@ export const resolveBuildAliases = ({
     "../../packages/shared/src/zcodeEndpoint.ts",
   ),
   "@zcode/shared/node": resolve(rootDirectory, "../../packages/shared/src/node.ts"),
+  // 外部 Harness 驱动表与逐行 Parser；漏声明会被通用前缀改写拼到 index.ts 后面，
+  // Desktop agent/SEA 打包失败（同上）。
+  "@zcode/shared/harness-drivers": resolve(
+    rootDirectory,
+    "../../packages/shared/src/harness-drivers.ts",
+  ),
   "@zcode/shared": resolve(rootDirectory, "../../packages/shared/src/index.ts"),
   "@zcode/core": resolve(cliDirectory, "../core/dist/index.js"),
 });
