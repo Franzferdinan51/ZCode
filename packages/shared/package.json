@@ -23,7 +23,8 @@
     "./workspace-hook-review-monotonicity": "./src/workspace-hook-review-monotonicity.ts",
     "./workspace-hook-trust-store-file": "./src/workspace-hook-trust-store-file.ts",
     "./harness-drivers": "./src/harness-drivers.ts",
-    "./auto-router": "./src/auto-router.ts"
+    "./auto-router": "./src/auto-router.ts",
+    "./systemone-scorer": "./src/systemone-scorer.ts"
   },
   "scripts": {
     "build": "tsc",

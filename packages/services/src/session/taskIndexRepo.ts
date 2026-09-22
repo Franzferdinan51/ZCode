@@ -38,6 +38,7 @@ import type {
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
 import { getTasksIndexDatabasePath } from "#src/paths.js";
 import { runTasksDatabaseMigrations } from "#src/session/tasksDatabase/migrations.js";
+import { buildTasksFtsQuery, ensureTasksFts } from "./tasksFts.js";
 
 const require = createRequire(import.meta.url);
 const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
@@ -487,6 +488,8 @@ export class TaskIndexRepo {
   private dbPath: string | null = null;
   private initializePromise: Promise<void> | null = null;
   private readonly writeChains = new Map<string, Promise<void>>();
+  /** FTS5 search path availability (probed at init; poisoned on any FTS error). */
+  private tasksFtsReady = false;
 
   async ensureReady(): Promise<void> {
     const path = this.startupDbPath ?? getTasksIndexDatabasePath();
@@ -532,6 +535,8 @@ export class TaskIndexRepo {
     // Worker 已完成该路径的原始准备，业务连接不再重复全表修复。
     if (isTasksStoragePrepared(path, this.db)) return;
     if (!isTasksStorageMigrated(path, this.db)) runTasksDatabaseMigrations(this.db);
+    // Best-effort FTS5 index for search; failure keeps the LIKE fallback.
+    this.tasksFtsReady = ensureTasksFts(this.getDatabase());
     this.backfillOffPeakTaskMarkers();
     this.backfillOffPeakGroupMemberships();
     this.cleanupDeletedTaskGroupingReferences();
@@ -1810,6 +1815,7 @@ export class TaskIndexRepo {
     const search = params.search?.trim();
     const normalizedSearchLike =
       search && search.length > 0 ? `%${search.toLocaleLowerCase()}%` : null;
+    const ftsMatch = search && search.length > 0 ? buildTasksFtsQuery(search) : null;
     const where = ["deleted = 0", `workspace_key IN (${workspaceKeys.map(() => "?").join(", ")})`];
     const args: Array<string | number> = [...workspaceKeys];
     if (params.provider) {
@@ -1822,33 +1828,49 @@ export class TaskIndexRepo {
     } else {
       where.push("pinned = 0", "archived = 0");
     }
-    if (normalizedSearchLike) {
+    const baseWhere = [...where];
+    const baseArgs = [...args];
+    // FTS5 first (index-speed), LIKE fallback (full scan) on any FTS error.
+    // CJK queries skip FTS: unicode61 does not segment CJK.
+    const searchClauses = (useFts: boolean): { clause: string; params: Array<string | number> } => {
+      if (useFts && ftsMatch) {
+        return {
+          clause: "rowid IN (SELECT rowid FROM tasks_fts WHERE tasks_fts MATCH ?)",
+          params: [ftsMatch],
+        };
+      }
       // 之前只按 title 模糊匹配，没有命中聊天正文；TaskSearchDialog 长期搜不到内容。
       // 现在 title 或 searchable_text 任一命中即视为匹配，正文摘要在结果阶段构建。
-      where.push("(LOWER(title) LIKE ? OR LOWER(searchable_text) LIKE ?)");
-    }
-
-    if (normalizedSearchLike) {
-      args.push(normalizedSearchLike, normalizedSearchLike);
-    }
-    const whereClause = where.join(" AND ");
-    const totalRow = this.getDatabase()
-      .prepare(`SELECT COUNT(1) AS total FROM tasks WHERE ${whereClause}`)
-      .get(...args) as { total: number } | undefined;
-    const total = totalRow?.total ?? 0;
+      return {
+        clause: "(LOWER(title) LIKE ? OR LOWER(searchable_text) LIKE ?)",
+        params: [normalizedSearchLike as string, normalizedSearchLike as string],
+      };
+    };
 
     const limit = normalizeLimit(params.limit);
-    const listArgs: Array<string | number> = [...args];
-    if (limit !== null) {
-      listArgs.push(limit);
-    }
     const orderBy =
       params.sortBy === "created"
         ? "created_at DESC, updated_at DESC, task_id DESC"
         : "updated_at DESC, created_at DESC, task_id DESC";
-    const rows = this.getDatabase()
-      .prepare(
-        `SELECT
+    const runList = (useFts: boolean): { total: number; rows: TaskIndexRow[] } => {
+      const scopedWhere = [...baseWhere];
+      const scopedArgs: Array<string | number> = [...baseArgs];
+      if (normalizedSearchLike) {
+        const filter = searchClauses(useFts);
+        scopedWhere.push(filter.clause);
+        scopedArgs.push(...filter.params);
+      }
+      const whereClause = scopedWhere.join(" AND ");
+      const totalRow = this.getDatabase()
+        .prepare(`SELECT COUNT(1) AS total FROM tasks WHERE ${whereClause}`)
+        .get(...scopedArgs) as { total: number } | undefined;
+      const listArgs: Array<string | number> = [...scopedArgs];
+      if (limit !== null) {
+        listArgs.push(limit);
+      }
+      const rows = this.getDatabase()
+        .prepare(
+          `SELECT
           workspace_key,
           workspace_path,
           workspace_identity,
@@ -1874,8 +1896,24 @@ export class TaskIndexRepo {
         FROM tasks
         WHERE ${whereClause}
         ORDER BY ${orderBy}${limit === null ? "" : " LIMIT ?"}`,
-      )
-      .all(...listArgs) as unknown as TaskIndexRow[];
+        )
+        .all(...listArgs) as unknown as TaskIndexRow[];
+      return { total: totalRow?.total ?? 0, rows };
+    };
+
+    let total: number;
+    let rows: TaskIndexRow[];
+    if (normalizedSearchLike && ftsMatch && this.tasksFtsReady) {
+      try {
+        ({ total, rows } = runList(true));
+      } catch {
+        // Poison the FTS path for this process and retry with LIKE.
+        this.tasksFtsReady = false;
+        ({ total, rows } = runList(false));
+      }
+    } else {
+      ({ total, rows } = runList(false));
+    }
     const workspacePurposeByKey = new Map(
       params.workspaceScopes.flatMap((scope) =>
         scope.workspacePurpose ? [[workspaceKey(scope), scope.workspacePurpose] as const] : [],

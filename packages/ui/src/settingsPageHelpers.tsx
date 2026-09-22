@@ -31,6 +31,7 @@ import { DataBaseDirControl } from "@/settings/DataBaseDirControl.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useOptionalServices } from "@/hooks/useServices.js";
 import { ProactiveSuggestionsSetting } from "@/settings/ProactiveSuggestionsSetting.js";
+import { LocalMlRouteSetting } from "@/settings/LocalMlRouteSetting.js";
 import { normalizeInterfaceMode, type InterfaceMode } from "@/lib/interfaceMode.js";
 import {
   createSettingsPageConfig,
@@ -870,6 +871,8 @@ export function GeneralSectionContent({
           }
         />
       </SettingsGroupCard>
+
+      <LocalMlRouteSetting />
 
       <SettingsGroupCard>
         <SettingsRow

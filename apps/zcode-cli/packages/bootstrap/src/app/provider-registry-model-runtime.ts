@@ -1,4 +1,5 @@
 import type { AiSdkModelAdapter } from "@zcode/adapters/model";
+import { isModelFailoverCooledDown, withModelFailover } from "@zcode/adapters/model";
 import type { Model } from "@zcode/contracts";
 import type { AgentRuntimeDeps } from "@zcode/core";
 import {
@@ -50,8 +51,37 @@ export class ApiProviderModelRuntime {
     if (!provider) throw new Error("Registry Selection 校验与 Provider 索引结果不一致");
     const registryModel = this.#registry.getModel(providerId, modelId);
     if (!registryModel) throw new Error("Registry Selection 校验与 Model 索引结果不一致");
-    return this.#createRegistryModel(provider, registryModel, target);
+    const model = this.#createRegistryModel(provider, registryModel, target);
+    // External-harness turns spawn user-consented CLIs; never auto-swap them.
+    if (provider.config.access.type === "external-harness") return model;
+    return withModelFailover(model, {
+      resolveNext: (failed) => this.#resolveFailoverSibling(provider, failed, target),
+    });
   };
+
+  /**
+   * Same-provider enabled siblings only: same account/billing, so a swap
+   * cannot surprise-spend on another provider. Skips the just-failed model
+   * and cooled-down entries; returns null when the chain is spent.
+   */
+  #resolveFailoverSibling(
+    provider: Provider,
+    failed: { providerId: string; modelId: string },
+    target: Parameters<RuntimeModelFactory>[0],
+  ): Model | null {
+    if (failed.providerId !== provider.providerId) return null;
+    for (const sibling of provider.models) {
+      if (sibling.modelId === failed.modelId) continue;
+      if (sibling.config.enabled === false) continue;
+      if (isModelFailoverCooledDown(provider.providerId, sibling.modelId)) continue;
+      try {
+        return this.#createRegistryModel(provider, sibling, target);
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  }
 
   start(): void {
     if (this.#started) return;

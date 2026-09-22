@@ -13,8 +13,10 @@ import type {
   SystemInfo,
 } from "@zcode/shared";
 import type { ISystemService } from "./system.js";
+import type { MlRouteServiceRequest, MlRouteServiceResponse } from "@zcode/shared/systemone-scorer";
 import { listIntegratedTerminalShellOptions } from "./integratedTerminalShells.js";
 import { resolveCommandOnPath } from "./commandResolver.js";
+import { suggestMlRoute as suggestMlRouteWithBackend } from "../routing/mlRouteService.js";
 
 const DEFAULT_PROBE_TIMEOUT_MS = 800;
 const DEFAULT_PROBE_ATTEMPTS = 2;
@@ -364,9 +366,7 @@ export function createSystemService(options: CreateSystemServiceOptions = {}): I
       });
     },
 
-    async resolveCommands(request: {
-      commands: string[];
-    }): Promise<Record<string, string | null>> {
+    async resolveCommands(request: { commands: string[] }): Promise<Record<string, string | null>> {
       const resolved: Record<string, string | null> = {};
       for (const command of (request.commands ?? []).slice(0, MAX_RESOLVE_COMMANDS)) {
         resolved[command] = resolveCommandOnPath(command, {
@@ -376,6 +376,10 @@ export function createSystemService(options: CreateSystemServiceOptions = {}): I
         });
       }
       return resolved;
+    },
+
+    async suggestMlRoute(request: MlRouteServiceRequest): Promise<MlRouteServiceResponse> {
+      return suggestMlRouteWithBackend(request);
     },
 
     async probeIntranet(request: IntranetProbeRequest): Promise<IntranetProbeResult> {

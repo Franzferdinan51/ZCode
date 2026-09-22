@@ -9,11 +9,13 @@
  * configured default or recent selection wins.
  *
  * Classifier extension point: pass a custom `AutoRouteScorer` to
- * `suggestRoute`. A SystemOne/Laya-style "System 1" decision maps directly
- * onto the `choice` primitive — state = signals.textSample, options =
- * candidate "providerId/modelId" labels — with per-option probabilities as
- * scores. That tier is intentionally not bundled: it needs a Python ML
- * runtime (torch/MLX + weights) that this repo does not ship or verify.
+ * `suggestRoute`, or an `AutoRouteScorerAsync` to `suggestRouteAsync`.
+ * A SystemOne/Laya-style "System 1" decision maps directly onto the
+ * `choice` primitive — state = signals.textSample, options = candidate
+ * "providerId/modelId" labels — with per-option probabilities as scores
+ * (see `@zcode/shared/systemone-scorer`). That tier is intentionally not
+ * bundled: it needs a Python ML runtime (torch/MLX + weights) this repo
+ * does not ship or verify, and stays behind an opt-in Settings toggle.
  */
 
 export interface AutoRouteCandidate {
@@ -55,6 +57,17 @@ export type AutoRouteScorer = (
   candidates: readonly AutoRouteCandidate[],
   signals: AutoRouteSignals,
 ) => readonly AutoRouteScoredCandidate[];
+
+/**
+ * Async scorer for ML-backed tiers (Jeff-1 / SystemOne / Laya sidecars).
+ * Lives behind an explicit opt-in: local ML runtimes cost RAM/CPU and must
+ * never block the synchronous heuristic path — callers fail open to
+ * `heuristicAutoRouteScorer` on any error or timeout.
+ */
+export type AutoRouteScorerAsync = (
+  candidates: readonly AutoRouteCandidate[],
+  signals: AutoRouteSignals,
+) => Promise<readonly AutoRouteScoredCandidate[]>;
 
 export type AutoRouteConfidence = "high" | "medium";
 
@@ -105,10 +118,7 @@ function capabilityLabel(kind: AutoRouteAttachmentKind): string {
   }
 }
 
-function candidateSupports(
-  candidate: AutoRouteCandidate,
-  kind: AutoRouteAttachmentKind,
-): boolean {
+function candidateSupports(candidate: AutoRouteCandidate, kind: AutoRouteAttachmentKind): boolean {
   switch (kind) {
     case "image":
       return candidate.supportsImage;
@@ -133,7 +143,10 @@ export function heuristicAutoRouteScorer(
       ? undefined
       : Math.ceil(signals.approxInputChars / CHARS_PER_TOKEN) + OUTPUT_HEADROOM_TOKENS;
   const isCodeTask =
-    CODE_FENCE.test(text) || FILE_PATH.test(text) || STACK_TRACE.test(text) || CODE_VERBS.test(text);
+    CODE_FENCE.test(text) ||
+    FILE_PATH.test(text) ||
+    STACK_TRACE.test(text) ||
+    CODE_VERBS.test(text);
   const isAnalysisTask = ANALYSIS_WORDS.test(text);
   const isLongInput = (signals.approxInputChars ?? 0) > 60_000;
 
@@ -199,15 +212,39 @@ export function suggestRoute(
   signals: AutoRouteSignals = {},
   scorer: AutoRouteScorer = heuristicAutoRouteScorer,
 ): AutoRouteSuggestion | null {
-  const enabled = candidates.filter((candidate) => candidate.enabled);
-  const scored = [...scorer(candidates, signals)].sort(
+  return buildAutoRouteSuggestion(
+    scorer(candidates, signals),
+    candidates.filter((candidate) => candidate.enabled).length,
+  );
+}
+
+/**
+ * Async twin of `suggestRoute` for ML-backed scorers. Ranking, confidence,
+ * and alternative semantics are identical — only the scorer may await I/O.
+ */
+export async function suggestRouteAsync(
+  candidates: readonly AutoRouteCandidate[],
+  signals: AutoRouteSignals = {},
+  scorer: AutoRouteScorerAsync,
+): Promise<AutoRouteSuggestion | null> {
+  return buildAutoRouteSuggestion(
+    await scorer(candidates, signals),
+    candidates.filter((candidate) => candidate.enabled).length,
+  );
+}
+
+function buildAutoRouteSuggestion(
+  scoredInput: readonly AutoRouteScoredCandidate[],
+  totalEnabled: number,
+): AutoRouteSuggestion | null {
+  const scored = [...scoredInput].sort(
     (a, b) => b.score - a.score || a.candidate.order - b.candidate.order,
   );
   const winner = scored[0];
   if (!winner || winner.score <= 0) return null;
   const runnerUp = scored[1];
   const confidence: AutoRouteConfidence =
-    uniqueHardFilterWin(scored, enabled.length) ||
+    uniqueHardFilterWin(scored, totalEnabled) ||
     (runnerUp !== undefined && winner.score - runnerUp.score >= 3)
       ? "high"
       : "medium";
@@ -256,7 +293,9 @@ export interface AutoRouteSelectionViewLike {
   }[];
 }
 
-export function candidatesFromSelectionView(view: AutoRouteSelectionViewLike): AutoRouteCandidate[] {
+export function candidatesFromSelectionView(
+  view: AutoRouteSelectionViewLike,
+): AutoRouteCandidate[] {
   const candidates: AutoRouteCandidate[] = [];
   let order = 0;
   for (const provider of view.providers) {
