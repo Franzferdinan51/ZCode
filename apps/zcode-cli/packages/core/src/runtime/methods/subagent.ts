@@ -266,7 +266,11 @@ export function createDefaultSubagentPort(
             ...(agentsMdInstructions ? { userInstructions: agentsMdInstructions } : {}),
           },
           agentName: `zcode-${request.agentType}`,
-          maxTurns: request.maxTurns ?? this.config.subagents?.maxTurns ?? 4,
+          // Z2: tier-scaled child maxTurns from the effort behavior policy;
+          // an explicit request/config value still wins over the policy default.
+          maxTurns:
+            request.maxTurns ?? this.config.subagents?.maxTurns ?? this.systemOneBehaviorPolicy?.policy
+              ?.subagentMaxTurns ?? 4,
           parentSessionId: this.sessionId,
           taskType: "subagent_child",
           // 动态工作流灰度门必须结构性继承：

@@ -207,7 +207,7 @@ export interface ReadFileStateEntry {
   limit?: number;
   isPartialView: boolean;
   readAt: Date;
-  sourceTool?: "Read" | "Write" | "Edit";
+  sourceTool?: "Read" | "Write" | "Edit" | "SearchAndRead" | "ApplyPatchSet";
   revisionId?: string;
   mtimeMs?: number;
   sizeBytes?: number;

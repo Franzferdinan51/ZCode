@@ -100,20 +100,20 @@ function buildAgentProviderDescription(
   });
 
   return [
-    "Launch a new agent to handle complex, multi-step tasks. Each agent type has specific capabilities and tools available to it.",
+    "Launch a subagent for work you should not do inline: broad multi-file exploration, or independent tasks that run in parallel while you continue.",
     "",
     agentList,
     "",
-    "When using the Agent tool, specify a subagent_type parameter to select which agent type to use. If omitted, the general-purpose agent is used.",
     "",
-    "## When to use",
-    "",
-    "Reach for this when the task matches an available agent type, when you have independent work to run in parallel, or when answering would mean reading across several files — delegate it and you keep the conclusion, not the file dumps. For a single-fact lookup where you already know the file, symbol, or value, search directly. Once you've delegated a search, don't also run it yourself — wait for the result.",
-    "",
-    "- The agent's final message is returned to you as the tool result; it is not shown to the user — relay what matters.",
-    "- A new Agent call starts fresh, so the prompt must be self-contained.",
-    "- `run_in_background: true` runs the agent asynchronously; you'll be notified when it completes.",
-    "- When you launch multiple agents for independent work, send them in a single message with multiple tool uses so they run concurrently.",
+    "- Pick `subagent_type` to match the task; omitted = general-purpose. A new Agent starts fresh, so the prompt must be self-contained.",
+    "- Delegate the SEARCH, keep the conclusion: once delegated, do not run the same search yourself — wait for the result.",
+    "- The agent's final message comes back as your tool result (not shown to the user) — relay what matters.",
+    "- `run_in_background: true` runs it async; you are notified on completion. Launch independent agents in one message with multiple tool calls so they run concurrently.",
+    "- Cost: each agent forks the full session context. For a single-fact lookup where you know the file or symbol, search directly instead.",
+    "- Spawning guidance: prefer parallel tool calls in THIS turn over launching a subagent — independent Read/Grep/Glob/Bash calls in one message run concurrently and cost no spawn overhead.",
+    "- Reserve Agent for genuinely broad, independent investigations that run while you continue other work — not for single-fact lookups or chains you can finish inline.",
+    "- Spawning costs ~2.5-4K tokens of fixed prompt overhead plus the subagent's own turns. On low/off effort this tool is hidden: do the work inline with parallel tool calls instead.",
+    "- Escape hatch: if the user explicitly asks you to use a subagent, their request wins over this guidance — spawn it.",
     // 只保留「用户点名工作流」这一种情形：工作流一律由用户显式请求触发，与系统提示词其余
     // 部分一致。不能把「结果层层喂给下一步的多代理编排」也划给 CreateWorkflow，
     // 那等于让模型在用户没开口时自行选择工作流。
@@ -291,11 +291,8 @@ export const taskToolEntry: ToolEntry = {
     ...agentToolEntry.metadata,
     name: TASK_TOOL_NAME,
     providerVisible: false,
-    description: [
-      "Claude Code-compatible alias for the Agent tool. Use this when plugin instructions ask for the Task tool.",
-      "",
-      agentToolEntry.metadata.description ?? "",
-    ].join("\n"),
+      description:
+        "Claude Code-compatible alias for the Agent tool — identical parameters and behavior. Use ONLY when plugin instructions or the user explicitly say \"Task\"; otherwise use Agent. See the Agent tool description for full usage guidance.",
   },
 };
 
@@ -307,11 +304,8 @@ function createTaskToolEntryFromAgent(entry: ToolEntry): ToolEntry {
       ...entry.metadata,
       name: TASK_TOOL_NAME,
       providerVisible: false,
-      description: [
-        "Claude Code-compatible alias for the Agent tool. Use this when plugin instructions ask for the Task tool.",
-        "",
-        entry.metadata.description ?? "",
-      ].join("\n"),
+        description:
+          "Claude Code-compatible alias for the Agent tool — identical parameters and behavior. Use ONLY when plugin instructions or the user explicitly say \"Task\"; otherwise use Agent. See the Agent tool description for full usage guidance.",
     },
   };
 }

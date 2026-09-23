@@ -55,6 +55,53 @@ Everything below is what this fork changed relative to upstream ZCode. The UI, c
 - No fixed ports exist to collide (ephemeral `listen` only); the Electron single-instance lock follows the separate userData directory.
 - Builds default to the `local` flavor; `ZCODE_OFFICIAL_IDENTITY=1` restores legacy production/preview resolution.
 
+
+**SystemOne agent-flow control (3.25.0)**
+
+SystemOne is this fork's local model router — and as of 3.25.0 it drives
+the full agent behavior plan, not just model selection. Each task asks the
+router for a tier, an effort level, and task labels, and the runtime
+conditions the turn on that decision: effort maps to a behavior policy (max
+model steps and tool calls, subagent allowance, read/search breadth,
+verification passes after edits, compaction aggressiveness), the labels
+drive per-task tool-pack pruning (irrelevant MCP servers and tools are
+suppressed before the request is built), heavy/ambiguous work gets
+plan-then-execute (planner writes `PLAN.md` with read-only tools, executor
+implements it), and doom-loop fingerprinting escalates repeated-call
+patterns from warning to strategy-change nudge to pause-and-retry.
+
+What SystemOne decides, in one line: **how much effort the task gets, which
+tools it sees, how long it may run, whether it plans first, how deeply it
+verifies, and how aggressively it compacts.**
+
+The fail-open contract: a down, slow, or malformed router changes nothing
+about what the agent *can* do — the turn runs exactly as it would without
+SystemOne, with the full tool surface attached. Low-confidence routes never
+prune. If a pruned tool turns out to be needed, the turn retries once with
+the full set. Every behavior number (budgets, policy dimensions) lives in
+config or env, tunable without a release, and model choice always flows
+from the router, the registry, or explicit user config — no hard-coded
+model IDs.
+
+Kill switches (each disables only its own surface; all default on):
+
+- `ZCODE_SYSTEMONE=0` — all SystemOne integration
+- `ZCODE_SPEEDSTACK_PRUNE=0` — per-task tool-pack / MCP pruning
+- `ZCODE_BUDGET_ENFORCE=0` — turn/tool-call budget enforcement
+- `ZCODE_PLAN_EXECUTE=0` — route-driven plan-then-execute
+- `ZCODE_ANCHORED_COMPACT=0` — anchored compaction (falls back to plain)
+- `ZCODE_DOOMLOOP=0` — doom-loop escalation (plain warnings stay)
+- `mcpPruning=false` (session config) — MCP pruning via config instead of env
+
+Independent controls: model selection stays with the pinned LM Studio
+model, the model picker, or explicit user config — SystemOne never loads,
+unloads, or switches models. The thinking level (`--thinking`) is set
+independently; the route's effort mapping only applies when the user hasn't
+set one, and explicit flags always win.
+
+Full decision table, fail-open contract, and tuning knobs:
+`apps/zcode-cli/specs/speed-stack.md` ("SystemOne decision surface").
+
 ## Setup
 
 Install Git, Node.js **24.14.0**, and pnpm **10.33.2**. [mise.toml](mise.toml) is the source of truth for tool versions. Run all development and packaging commands below from the repository root.

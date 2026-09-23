@@ -47,6 +47,9 @@ import type { PromptRuntimeCommand } from "../command-queue.js";
 import { enqueueCancellableRuntimeCommand } from "./runtime-command-submit.js";
 import { buildReferencedSessionContextReminderBody } from "../../session-context/read-session-context.js";
 import { runRegularTurnLoop } from "./turn-loop.js";
+import { runPlanThenExecuteTurn } from "./plan-execute-turn.js";
+import { decidePlanThenExecute } from "../../speedstack/plan-execute-gate.js";
+import { resolveSystemOneBehaviorPolicy } from "../../speedstack/systemone-route.js";
 import {
   maybeStartDeferredSessionTitleGeneration,
   maybeStartSessionTitleGeneration,
@@ -110,8 +113,7 @@ export async function executeTurnCommand(
   // 普通 Turn 过去在异步初始化完成后才读取 Session Selection/输出样式，
   // 初始化期间发生的切模会越过 admission 边界，错误影响已经开始的 Turn。
   // 这里在任何 await 之前冻结本轮事实；后续配置变化只作用于下一轮。
-  let admittedModelSelection =
-    options?.intent?.modelSelection ?? this.getSessionModelSelection();
+  let admittedModelSelection = options?.intent?.modelSelection ?? this.getSessionModelSelection();
   const admittedOutputStyle = this.config.outputStyle;
   const compactInstructions = parseCompactCommand(input);
   const rewindCommand = parseRewindCommand(input);
@@ -205,9 +207,7 @@ export async function executeTurnCommand(
       //
       // Per-submit speed-stack knobs (desktop composer / CLI flags) merge
       // over the runtime's session config for this turn.
-      const intentSpeedStack = normalizeSpeedStackSessionConfig(
-        options?.intent?.speedStack,
-      );
+      const intentSpeedStack = normalizeSpeedStackSessionConfig(options?.intent?.speedStack);
       this.speedStackConfig = { ...this.speedStackConfig, ...intentSpeedStack };
       const routeDecision = await this.ensureSystemOneRouteDecision(input);
       // Z0: retarget the session model in place when model routing is on.
@@ -692,6 +692,9 @@ export async function executeTurnCommand(
           reactiveCompactAttemptedInCurrentModelStep: false,
           repeatedToolCallSignature: undefined,
           repeatedToolCallStreakCount: 0,
+          doomLoopStreak: 0,
+          doomLoopStage: 0,
+          doomLoopUsedTools: [],
           stopHookContinuationCount: 0,
           streamRecoveryRetryCount: 0,
           tokenCount: 0,
@@ -713,9 +716,37 @@ export async function executeTurnCommand(
         };
 
         openGoalStateChangeReminderDeferral(activeTurn);
+        // Z3: route-driven plan-then-execute gate. Decided here where the
+        // route decision is fresh; the turn runs two phases (planner with
+        // read-only tools, then executor) when selected.
+        const planExecuteGate = decidePlanThenExecute({
+          explicitConfig: this.speedStackConfig.planThenExecute,
+          policy: resolveSystemOneBehaviorPolicy(this, process.env).policy,
+          routeConfidence: routeDecision?.confidence,
+          routeTier: routeDecision?.tier,
+          taskLabels: routeDecision?.taskLabels,
+          taskText: input,
+        });
+        if (planExecuteGate.plan) {
+          this.logger?.info("Plan-then-execute selected for turn", {
+            ...traceContextToLogContext(turnTraceContext),
+            event: "plan_execute.selected",
+            module: "core.runtime",
+            reason: planExecuteGate.reason,
+          });
+        }
         phaseStartedAt = startTurnPhase("regular_turn_loop");
         try {
-          await runRegularTurnLoop.call(this, loopState);
+          if (planExecuteGate.plan) {
+            await runPlanThenExecuteTurn.call(this, loopState, {
+              admittedModelId: admittedModelSelection?.modelId,
+              gate: planExecuteGate,
+              input,
+              routeDecision,
+            });
+          } else {
+            await runRegularTurnLoop.call(this, loopState);
+          }
           completeTurnPhase("regular_turn_loop", phaseStartedAt);
         } finally {
           finishOutputTokenRecovery(loopState.turnRequestState);

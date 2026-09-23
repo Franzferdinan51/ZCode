@@ -28,9 +28,13 @@ import {
 import { persistToolModelStepFinish } from "./turn-step-finish.js";
 import { completedToolPartMetadata, mcpToolPartMetadata } from "./tool-part-metadata.js";
 import { drainInlineGuideForNextRequest } from "./turn-guide-drain.js";
-import { handleToolCallAnomalyWarnings } from "./turn-tool-warnings.js";
+import {
+  handleToolCallAnomalyWarnings,
+  handleVerificationPassReminder,
+} from "./turn-tool-warnings.js";
 import { emitNestedModelUsageEvents } from "./turn-nested-model-usage.js";
 import type { RegularTurnLoopState } from "./turn-loop-state.js";
+import { noteSpeedStackBoundaryEvents } from "./anchored-compact-prep.js";
 import {
   isAutomationMutationRestrictedTurn,
   isOffPeakCreateRestrictedTurn,
@@ -465,6 +469,18 @@ export async function executeToolCallsForModelStep(
   await handleToolCallAnomalyWarnings(this, state, {
     modelTraceContext: options.modelTraceContext,
     toolCalls: options.toolCalls,
+  });
+  // Z3: Rank 4 boundary-compact event detection (tests-passed /
+  // subtask-verified). One-shot per turn; the loop clears it after checking.
+  const boundaryToolInputs = new Map<string, Record<string, unknown>>();
+  for (const [toolCallId, part] of toolParts) {
+    boundaryToolInputs.set(toolCallId, part.input);
+  }
+  noteSpeedStackBoundaryEvents(this, state, results, boundaryToolInputs);
+  // Z2: ultra-tier review pass after edits (once per turn).
+  await handleVerificationPassReminder(this, state, {
+    toolCalls: options.toolCalls,
+    modelTraceContext: options.modelTraceContext,
   });
   await persistToolModelStepFinish(this, state, options);
   await drainInlineGuideForNextRequest(this, state);

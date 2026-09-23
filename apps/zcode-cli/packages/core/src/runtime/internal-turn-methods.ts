@@ -78,6 +78,7 @@ import type {
   ReactiveCompactLoopContext,
   TurnRequestState,
 } from "./methods/turn-loop-state.js";
+import type { BoundaryCompactEventKind } from "../speedstack/anchored-compaction.js";
 
 export interface AgentRuntimeTurnMethods {
   admitPrompt(
@@ -176,6 +177,16 @@ export interface AgentRuntimeTurnMethods {
     events: SessionEvent[],
     abortSignal: AbortSignal | undefined,
     context: AutoCompactLoopContext,
+  ): Promise<AutoCompactOutcome>;
+  /**
+   * Z3: Rank 4 boundary-triggered compaction at a lower watermark than
+   * emergency compaction (plan stage / passing tests / verified subtask).
+   */
+  boundaryCompactIfNeeded(
+    turnTraceContext: TraceContext,
+    events: SessionEvent[],
+    abortSignal: AbortSignal | undefined,
+    context: AutoCompactLoopContext & { boundaryEvent: BoundaryCompactEventKind },
   ): Promise<AutoCompactOutcome>;
   microcompactIfNeeded(
     turnTraceContext: TraceContext,

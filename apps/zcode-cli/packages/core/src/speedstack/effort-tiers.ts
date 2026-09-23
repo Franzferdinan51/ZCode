@@ -20,6 +20,7 @@
 // reverse).
 
 import type { ModelOptions } from "@zcode/contracts";
+import { resolveTurnBudgets, type TurnBudgets } from "./turn-budgets.js";
 
 export const EFFORT_TIERS = ["low", "medium", "high", "xhigh", "ultra"] as const;
 
@@ -182,7 +183,11 @@ export function normalizeSpeedStackSessionConfig(
   if (raw["modelRouting"] === true) config.modelRouting = true;
   const thinkingMode = parseThinkingMode(raw["thinkingMode"]);
   if (thinkingMode) config.thinkingMode = thinkingMode;
-  if (raw["planThenExecute"] === true) config.planThenExecute = true;
+  // Z3: preserve an explicit boolean pin — false forces direct execution
+  // in the Rank-3 gate (previously only `true` survived normalization).
+  if (typeof raw["planThenExecute"] === "boolean") {
+    config.planThenExecute = raw["planThenExecute"];
+  }
   if (Array.isArray(raw["mcpServerAllowlist"])) {
     config.mcpServerAllowlist = raw["mcpServerAllowlist"].filter(
       (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
@@ -239,4 +244,273 @@ export function resolveThinkingTier(input: {
   if (input.explicitTier) return { kind: "tier", tier: input.explicitTier };
   if (input.routeHint) return { kind: "tier", tier: input.routeHint };
   return undefined;
+}
+
+// -- Z2: effort behavior policy ("effort means behavior") -----------------
+//
+// Ryan's explicit ask (3.25.0 Rank 2): effort must change agent BEHAVIOR,
+// not just reasoningLevel/maxOutputTokens. This table is the single policy
+// surface the runtime consults per turn, resolved alongside
+// applySystemOneEffortOverride in speedstack/systemone-route.ts
+// (resolveSystemOneBehaviorPolicy).
+//
+// Dimensions per tier:
+//   maxSteps / maxToolCalls  - per-turn budgets. DEFAULTS ONLY: the
+//     package-1 config surface (ZCODE_BUDGET_<ROUTE_TIER>_MAX_STEPS /
+//     _MAX_TOOL_CALLS, ZCODE_BUDGET_DEFAULT_*) always wins when set.
+//     There is deliberately no second config for caps.
+//   subagents                - "never" (low/off: the dispatch tools are
+//     hidden from the model), "conservative" (allowed, modest maxTurns),
+//     "parallel" (ultra: allowed for parallel exploration).
+//   subagentMaxTurns         - tier-scaled maxTurns for spawned subagents
+//     (runtime/methods/subagent.ts).
+//   readBreadth              - advisory cap on parallel reads/searches per
+//     exploration step. Resolved, logged, and harness-reported; hard
+//     enforcement lands with the Rank 7/8 workflow/doom-loop work.
+//   verificationPasses       - review passes after edits (xhigh/ultra: one
+//     review reminder once per turn when Edit/Write ran).
+//   compactionAggressiveness  - multiplier on the auto-compact threshold
+//     (1.0 = default; <1 compacts earlier). Wired via
+//     thresholdPercentOverride in compact/policy.ts.
+//   planThenExecuteEligible  - gate for the Rank-3 plan-execute wiring;
+//     see isPlanThenExecuteEligible (route-tier heavy also qualifies).
+//
+// Every dimension is separately overridable via env (documented below);
+// garbage fails open to the table default. Thinking "off" resolves to the
+// low row (minimal agent behavior).
+//
+// Env overrides (all optional):
+//   ZCODE_EFFORT_<TIER>_SUBAGENTS          never|conservative|parallel
+//   ZCODE_EFFORT_<TIER>_SUBAGENT_MAX_TURNS positive int
+//   ZCODE_EFFORT_<TIER>_READ_BREADTH       positive int
+//   ZCODE_EFFORT_<TIER>_VERIFICATION_PASSES non-negative int
+//   ZCODE_EFFORT_<TIER>_COMPACTION         positive float (0.85 = compact at 85% of normal threshold)
+//   ZCODE_EFFORT_<TIER>_PLAN_EXECUTE       1|0
+// <TIER> is the uppercase effort tier: LOW, MEDIUM, HIGH, XHIGH, ULTRA.
+
+/** Subagent allowance for an effort tier. */
+export const SUBAGENT_ALLOWANCES = ["never", "conservative", "parallel"] as const;
+/** Subagent allowance for an effort tier. */
+export type SubagentAllowance = (typeof SUBAGENT_ALLOWANCES)[number];
+
+/** Per-tier agent behavior policy. All fields have table defaults; see env overrides above. */
+export interface EffortBehaviorPolicy {
+  /** The effort tier this row describes. */
+  readonly tier: EffortTier;
+  /** Default max model steps per turn (package-1 ZCODE_BUDGET_* env wins). */
+  readonly maxSteps: number;
+  /** Default max tool calls per turn (package-1 ZCODE_BUDGET_* env wins). */
+  readonly maxToolCalls: number;
+  /** Subagent allowance: never (low/off), conservative, parallel (ultra). */
+  readonly subagents: SubagentAllowance;
+  /** Tier-scaled maxTurns for spawned subagents. */
+  readonly subagentMaxTurns: number;
+  /** Advisory cap on parallel reads/searches per exploration step. */
+  readonly readBreadth: number;
+  /** Review passes after edits (xhigh/ultra: 1). */
+  readonly verificationPasses: number;
+  /** Multiplier on the auto-compact threshold (1.0 = default). */
+  readonly compactionAggressiveness: number;
+  /** Eligible for plan-then-execute gating (Rank 3 consumes this). */
+  readonly planThenExecuteEligible: boolean;
+}
+
+/**
+ * The behavior table. Step/call defaults are the RAISED caps per Ryan's
+ * tuning directive: comfortably above the too-tight demo values (balanced
+ * 20/40 caused 1/6 cap hits on the eval battery), while still bounding
+ * genuine runaways. Tunable without a release via the env overrides above
+ * (steps/calls) and the package-1 ZCODE_BUDGET_* surface.
+ */
+const EFFORT_BEHAVIOR_POLICY_TABLE: Record<EffortTier, EffortBehaviorPolicy> = {
+  low: {
+    tier: "low",
+    maxSteps: 25,
+    maxToolCalls: 60,
+    subagents: "never",
+    subagentMaxTurns: 2,
+    readBreadth: 3,
+    verificationPasses: 0,
+    compactionAggressiveness: 1.0,
+    planThenExecuteEligible: false,
+  },
+  medium: {
+    tier: "medium",
+    maxSteps: 40,
+    maxToolCalls: 100,
+    subagents: "conservative",
+    subagentMaxTurns: 4,
+    readBreadth: 6,
+    verificationPasses: 0,
+    compactionAggressiveness: 1.0,
+    planThenExecuteEligible: false,
+  },
+  high: {
+    tier: "high",
+    maxSteps: 60,
+    maxToolCalls: 150,
+    subagents: "conservative",
+    subagentMaxTurns: 6,
+    readBreadth: 10,
+    verificationPasses: 0,
+    compactionAggressiveness: 1.0,
+    planThenExecuteEligible: false,
+  },
+  xhigh: {
+    tier: "xhigh",
+    maxSteps: 90,
+    maxToolCalls: 250,
+    subagents: "parallel",
+    subagentMaxTurns: 8,
+    readBreadth: 15,
+    verificationPasses: 1,
+    compactionAggressiveness: 0.9,
+    planThenExecuteEligible: true,
+  },
+  ultra: {
+    tier: "ultra",
+    maxSteps: 120,
+    maxToolCalls: 400,
+    subagents: "parallel",
+    subagentMaxTurns: 12,
+    readBreadth: 25,
+    verificationPasses: 1,
+    compactionAggressiveness: 0.85,
+    planThenExecuteEligible: true,
+  },
+};
+
+function parsePositiveIntValue(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  const value = Number.parseInt(trimmed, 10);
+  return value > 0 ? value : undefined;
+}
+
+function parseNonNegativeIntValue(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  return Number.parseInt(trimmed, 10);
+}
+
+function parsePositiveFloatValue(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  const trimmed = raw.trim();
+  if (!/^\d+(\.\d+)?$/.test(trimmed)) return undefined;
+  const value = Number.parseFloat(trimmed);
+  return Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function parseSubagentAllowance(raw: string | undefined): SubagentAllowance | undefined {
+  if (raw === undefined) return undefined;
+  const normalized = raw.trim().toLowerCase();
+  return (SUBAGENT_ALLOWANCES as readonly string[]).includes(normalized)
+    ? (normalized as SubagentAllowance)
+    : undefined;
+}
+
+function parseBoolean01(raw: string | undefined): boolean | undefined {
+  if (raw === undefined) return undefined;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "1" || normalized === "true") return true;
+  if (normalized === "0" || normalized === "false") return false;
+  return undefined;
+}
+
+/**
+ * Resolve the behavior policy for an effort tier: table defaults with
+ * per-dimension env overrides applied. Never throws; garbage fails open
+ * to the table row.
+ */
+export function getEffortBehaviorPolicy(
+  tier: EffortTier,
+  env: NodeJS.ProcessEnv = process.env,
+): EffortBehaviorPolicy {
+  try {
+    const base =
+      EFFORT_BEHAVIOR_POLICY_TABLE[tier] ??
+      EFFORT_BEHAVIOR_POLICY_TABLE[DEFAULT_EFFORT_TIER];
+    const prefix = `ZCODE_EFFORT_${tier.toUpperCase()}`;
+    return {
+      tier: base.tier,
+      maxSteps: base.maxSteps,
+      maxToolCalls: base.maxToolCalls,
+      subagents: parseSubagentAllowance(env[`${prefix}_SUBAGENTS`]) ?? base.subagents,
+      subagentMaxTurns:
+        parsePositiveIntValue(env[`${prefix}_SUBAGENT_MAX_TURNS`]) ?? base.subagentMaxTurns,
+      readBreadth:
+        parsePositiveIntValue(env[`${prefix}_READ_BREADTH`]) ?? base.readBreadth,
+      verificationPasses:
+        parseNonNegativeIntValue(env[`${prefix}_VERIFICATION_PASSES`]) ??
+        base.verificationPasses,
+      compactionAggressiveness:
+        parsePositiveFloatValue(env[`${prefix}_COMPACTION`]) ??
+        base.compactionAggressiveness,
+      planThenExecuteEligible:
+        parseBoolean01(env[`${prefix}_PLAN_EXECUTE`]) ?? base.planThenExecuteEligible,
+    };
+  } catch {
+    return (
+      EFFORT_BEHAVIOR_POLICY_TABLE[tier] ??
+      EFFORT_BEHAVIOR_POLICY_TABLE[DEFAULT_EFFORT_TIER]
+    );
+  }
+}
+
+/**
+ * Resolve the EFFECTIVE per-turn budgets: the policy table's raised
+ * defaults for the effort tier, with the package-1 env surface
+ * (ZCODE_BUDGET_<ROUTE_TIER>_MAX_STEPS/_MAX_TOOL_CALLS, ZCODE_BUDGET_DEFAULT_*)
+ * winning wherever it is set. When no effort tier resolved, this is exactly
+ * the package-1 env-only resolution ({} when unconfigured = unbounded =
+ * today's behavior). Never throws.
+ */
+export function resolveEffectiveTurnBudgets(input: {
+  routeTier?: string | undefined;
+  effortTier?: EffortTier | undefined;
+  env?: NodeJS.ProcessEnv;
+}): TurnBudgets {
+  try {
+    const env = input.env ?? process.env;
+    const envBudgets = resolveTurnBudgets(input.routeTier, env);
+    if (!input.effortTier) return envBudgets;
+    const policy = getEffortBehaviorPolicy(input.effortTier, env);
+    return {
+      maxSteps: envBudgets.maxSteps ?? policy.maxSteps,
+      maxToolCalls: envBudgets.maxToolCalls ?? policy.maxToolCalls,
+    };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Whether the model may spawn subagents under this policy. "never" (low/off)
+ * hides the dispatch tools from the model; anything else allows spawning
+ * (modest vs generous maxTurns carries the conservative/parallel split).
+ */
+export function isSubagentSpawningAllowed(
+  policy: EffortBehaviorPolicy | undefined,
+): boolean {
+  return policy?.subagents !== "never";
+}
+
+/**
+ * Plan-then-execute eligibility gate (Rank 3 consumes this; Rank 2 only
+ * defines it). Eligible when the effort policy says so (xhigh/ultra) OR the
+ * route tier is heavy; below that, direct execution. Fail-open to false on
+ * garbage input.
+ */
+export function isPlanThenExecuteEligible(input: {
+  policy?: EffortBehaviorPolicy | undefined;
+  routeTier?: string | undefined;
+}): boolean {
+  try {
+    if (input.policy?.planThenExecuteEligible === true) return true;
+    return (input.routeTier ?? "").trim().toLowerCase() === "heavy";
+  } catch {
+    return false;
+  }
 }

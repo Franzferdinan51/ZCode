@@ -190,7 +190,7 @@ export const cronCreateToolEntry: ToolEntry = {
     // 二阶调度要求应在工具 contract 中直接约束模型；自然语言不能靠关键词或正则可靠判定，
     // automation 执行轮的 mutation tool denylist 才是阻止递归修改任务定义的权限边界。
     description:
-      "Create a persistent scheduled automation in the current workspace. It uses the host's real current clock for relative delayMinutes schedules, or a standard 5-field cron expression in the user's local timezone for absolute/recurring schedules, and survives app restarts. The prompt must describe the final scheduled work directly and must never ask the run to create, schedule, or configure another automation or call CronCreate.",
+      "Create a persistent scheduled automation in the current workspace — recurring or clock-scheduled (standard 5-field cron in the user's local timezone, or relative delayMinutes), surviving app restarts. For recurring/clock-scheduled work; for deferrable 'when idle' work with no clock use OffPeakCreate instead. The prompt must describe the final work directly and must never ask the run to create, schedule, or configure another automation or call CronCreate.",
     modelInstructions: [
       "Use this only when the user explicitly asks to schedule future automatic work.",
       "Interpret cron in the user's local timezone using fields: minute hour day-of-month month day-of-week. Do not convert to UTC.",
@@ -251,7 +251,7 @@ export const cronListToolEntry: ToolEntry = {
   capability: "List scheduled automations for the current workspace",
   metadata: {
     name: "CronList",
-    description: "List scheduled automations in the current workspace.",
+    description: "List scheduled automations in the current workspace. Read-only — check here before updating or deleting one.",
     readOnly: true,
     destructive: false,
     concurrentSafe: true,
@@ -347,7 +347,7 @@ export const cronDeleteToolEntry: ToolEntry = {
   capability: "Delete a scheduled automation from the current workspace",
   metadata: {
     name: "CronDelete",
-    description: "Delete a scheduled automation from the current workspace by automation id.",
+    description: "Delete a scheduled automation from the current workspace by automation id. Irreversible — run history goes with it.",
     readOnly: false,
     destructive: true,
     concurrentSafe: false,

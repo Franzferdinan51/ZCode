@@ -57,14 +57,12 @@ const FILE_UNCHANGED_STUB =
 const READ_PROVIDER_DESCRIPTION = [
   "Reads a file from the local filesystem.",
   "",
-  "- `file_path` must be an absolute path.",
-  `- Reads up to ${READ_DEFAULT_MAX_LINES} lines by default.`,
-  "- You can optionally specify a line offset and limit (especially handy for long files), but it's recommended to read the whole file by not providing these parameters",
-  "- Results are returned using cat -n format, with line numbers starting at 1",
-  "- Reads images (PNG, JPG, …) and presents them visually.",
-  "- Reads videos (MP4, MOV, WEBM, …) and presents them as video input (subject to ZCode's video input limit).",
+  "- SEARCH FIRST: to find content or code, use Grep (file contents) or Glob (file names) — do not Read whole files just to search them.",
+  "- `file_path` must be an absolute path. Reads up to ${READ_DEFAULT_MAX_LINES} lines by default; for long files pass `offset`/`limit` and page through — never read an entire large file when a section will do.",
+  "- Results use cat -n format (line numbers start at 1); strip the number prefix before using the text in Edit.",
+  "- Also reads images (PNG, JPG, …) visually, videos (MP4, MOV, WEBM, …) as video input (subject to ZCode's video input limit), and PDFs.",
   "- Reading a directory, a missing file, or an empty file returns an error or system reminder rather than content.",
-  "- Do NOT re-read a file you just edited to verify — Edit/Write would have errored if the change failed, and the harness tracks file state for you.",
+  "- Do NOT re-read a file you just edited to verify — Edit/Write error if the change failed, and unchanged re-reads are flagged as wasted calls.",
 ].join("\n");
 
 const fallbackReadFileStates = new WeakMap<ToolExecutionContext, ReadFileStateMap>();
@@ -524,3 +522,44 @@ export const readToolEntry: ToolEntry = {
     recordOutput: "summary",
   },
 };
+
+// -----------------------------------------------
+// Workflow-tool read stamping (SearchAndRead)
+// -----------------------------------------------
+
+/**
+ * Record a file read performed by a workflow tool (e.g. SearchAndRead)
+ * in the shared read-file state, so downstream Edit/Write freshness
+ * checks and Read's unchanged-file dedup see a coherent view.
+ *
+ * - Full-file reads (isPartialView: false) satisfy Edit's read-before-edit
+ *   check, so a SearchAndRead(files) -> Edit chain needs no redundant Read.
+ * - Window reads (isPartialView: true) do NOT satisfy it (Edit still
+ *   requires a full Read), but they keep Read's dedup coherent.
+ */
+export function recordWorkflowToolRead(
+  context: ToolExecutionContext,
+  input: {
+    filePath: string;
+    content: string;
+    isPartialView: boolean;
+    revisionId?: string;
+    mtimeMs?: number;
+    sizeBytes?: number;
+  },
+): void {
+  const state = getReadFileState(context);
+  const key = createReadFileStateKey(input.filePath, 1, undefined);
+  state.set(key, {
+    path: input.filePath,
+    content: input.content,
+    offset: undefined,
+    limit: undefined,
+    isPartialView: input.isPartialView,
+    readAt: new Date(),
+    sourceTool: "SearchAndRead",
+    revisionId: input.revisionId,
+    mtimeMs: normalizeReadFileStateMtimeMs(input.mtimeMs),
+    sizeBytes: input.sizeBytes,
+  });
+}

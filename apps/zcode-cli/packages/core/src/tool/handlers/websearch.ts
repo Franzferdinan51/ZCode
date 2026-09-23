@@ -54,6 +54,7 @@ function buildWebSearchProviderDescription(now: Date = new Date()): string {
     `- The current month is ${currentMonth} — use this when searching for recent information.`,
     "- `allowed_domains` / `blocked_domains` filter results.",
     '- After answering from results, end with a "Sources:" list of the URLs you used as markdown links.',
+    "- For fetching a known URL's full content use WebFetch; for local files use Read/Grep.",
   ].join("\n");
 }
 

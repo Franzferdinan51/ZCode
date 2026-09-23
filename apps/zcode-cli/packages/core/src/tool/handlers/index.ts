@@ -26,6 +26,8 @@ import type { BashTimeoutPolicy } from "../bash-timeout-policy.js";
 import { createJsToolEntry, jsToolEntry } from "./node-repl.js";
 import { globToolEntry } from "./glob.js";
 import { grepToolEntry } from "./grep.js";
+import { searchAndReadToolEntry } from "./search-and-read.js";
+import { applyPatchSetToolEntry } from "./apply-patch-set.js";
 import { webFetchToolEntry } from "./webfetch.js";
 import { webSearchToolEntry } from "./websearch.js";
 import {
@@ -81,6 +83,11 @@ export const builtInTools: ToolEntry[] = [
   bashToolEntry,
   globToolEntry,
   grepToolEntry,
+  // Rank 7 workflow tools: additive compositions (search->read, atomic
+  // multi-file edit). Primitives stay available; JIT packs include them
+  // only under relevant labels (see speedstack/tool-packs.ts).
+  searchAndReadToolEntry,
+  applyPatchSetToolEntry,
   webFetchToolEntry,
   webSearchToolEntry,
   todoReadToolEntry,
@@ -156,6 +163,19 @@ const DYNAMIC_WORKFLOW_TOOL_NAMES: ReadonlySet<string> = new Set([
   RESOLVE_WORKFLOW_QUESTION_TOOL_NAME,
 ]);
 
+/**
+ * Rank 7 workflow tools (SearchAndRead, ApplyPatchSet). Additive: disabling
+ * them restores the pre-3.25.0 tool surface exactly.
+ */
+const WORKFLOW_TOOL_NAMES: ReadonlySet<string> = new Set(["SearchAndRead", "ApplyPatchSet"]);
+
+/** Env kill-switch for the Rank 7 workflow tools. Set to "0" to disable. */
+export const WORKFLOW_TOOLS_KILL_SWITCH_ENV = "ZCODE_WORKFLOW_TOOLS";
+
+export function isWorkflowToolEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env[WORKFLOW_TOOLS_KILL_SWITCH_ENV] !== "0";
+}
+
 interface RegisterBuiltInToolsOptions {
   bashTimeoutPolicy?: BashTimeoutPolicy;
   includeSkill?: boolean;
@@ -209,6 +229,9 @@ export function registerBuiltInTools(
       continue;
     }
     if (allowedTools && !allowedTools.has(entry.metadata.name)) {
+      continue;
+    }
+    if (!isWorkflowToolEnabled() && WORKFLOW_TOOL_NAMES.has(entry.metadata.name)) {
       continue;
     }
     if (disallowedTools?.has(entry.metadata.name)) {

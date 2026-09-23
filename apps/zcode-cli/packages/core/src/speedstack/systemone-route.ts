@@ -27,12 +27,17 @@ import { extractRouteEffortHint } from "@zcode/shared/systemone-scorer";
 import {
   effortTierToModelOptions,
   findThinkingOffLevel,
+  getEffortBehaviorPolicy,
   resolveEffectiveEffortTier,
+  resolveEffectiveTurnBudgets,
   resolveThinkingTier,
+  type EffortBehaviorPolicy,
   type EffortTier,
   type EffortTierModel,
   type SpeedStackSessionConfig,
 } from "./effort-tiers.js";
+import type { TurnBudgets } from "./turn-budgets.js";
+import { computeServerShortlist } from "./tool-packs.js";
 
 /** Local SystemOne shim route endpoint (see systemone/shim.py). */
 export const SYSTEMONE_ROUTE_ENDPOINT = "http://127.0.0.1:8765/v1/systemone/route";
@@ -76,6 +81,14 @@ export interface SystemOneRouteDecision {
   readonly effort?: string;
   readonly taskLabels?: readonly string[];
   readonly modelId?: string;
+  /**
+   * Per-tier classification scores, preserved verbatim from the shim's
+   * `probabilities` payload when present. Never consumed by current
+   * policy thresholds (those stay confidence-gated); carried end-to-end
+   * so the future scored-classification/ranking work can condition on
+   * them without re-fetching the route.
+   */
+  readonly tierScores?: Readonly<Record<string, number>>;
 }
 
 /**
@@ -123,6 +136,7 @@ function parseRouteDecision(payload: unknown): SystemOneRouteDecision | undefine
     effort?: string;
     taskLabels?: readonly string[];
     modelId?: string;
+    tierScores?: Readonly<Record<string, number>>;
   } = { tier, confidence };
   if (typeof record["effort"] === "string") decision.effort = record["effort"];
   if (
@@ -136,7 +150,42 @@ function parseRouteDecision(payload: unknown): SystemOneRouteDecision | undefine
       (label): label is string => typeof label === "string",
     );
   }
+  const probabilities = record["probabilities"];
+  if (probabilities && typeof probabilities === "object") {
+    const tierScores: Record<string, number> = {};
+    for (const [key, value] of Object.entries(
+      probabilities as Record<string, unknown>,
+    )) {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        tierScores[key] = value;
+      }
+    }
+    if (Object.keys(tierScores).length > 0) decision.tierScores = tierScores;
+  }
   return decision;
+}
+
+/**
+ * Margin signal for a route decision: the top-1 vs top-2 gap of the
+ * preserved per-tier scores. Wide margin -> the classifier committed;
+ * narrow margin -> hedge (wider tool pack, deeper verification). Pure;
+ * undefined when the shim did not provide scores. This only surfaces the
+ * signal -- no policy conditions on it yet.
+ */
+export function routeTierMargin(
+  decision: SystemOneRouteDecision | undefined,
+): number | undefined {
+  try {
+    const scores = decision?.tierScores;
+    if (!scores) return undefined;
+    const ranked = Object.values(scores)
+      .filter((value) => Number.isFinite(value))
+      .sort((a, b) => b - a);
+    if (ranked.length < 2) return undefined;
+    return ranked[0] - ranked[1];
+  } catch {
+    return undefined;
+  }
 }
 
 // -- Z0: model routing -----------------------------------------------
@@ -274,16 +323,55 @@ export function applySystemOneEffortOverride<
 
 // -- Z2: MCP attach policy --------------------------------------------
 
+/**
+ * Tool-level MCP policy for one task: which configured MCP servers are
+ * worth attaching. Consumed at MCP startup (runtime/methods/mcp.ts) to skip
+ * starting clearly-irrelevant servers, and at request construction
+ * (runtime/methods/turn-loop.ts) where the full per-tool shortlist is
+ * applied via speedstack/tool-packs.ts.
+ */
+export interface McpToolLevelPolicy {
+  /**
+   * - "all": keep every server (fail-open default).
+   * - "none": skip all MCP servers (confident trivial task).
+   * - "subset": start only `keepServers`.
+   */
+  readonly mode: "all" | "none" | "subset";
+  /** Human-readable reason; always logged with the decision. */
+  readonly reason: string;
+  /** Servers worth starting when mode === "subset". */
+  readonly keepServers?: readonly string[];
+  /** Servers pruned when mode === "subset". */
+  readonly prunedServers?: readonly string[];
+  /**
+   * Preserved route signals (see SystemOneRouteDecision.tierScores):
+   * per-tier scores + the top-1/top-2 margin. Informational for now --
+   * the future ranking work consumes these; current thresholds ignore them.
+   */
+  readonly tierScores?: Readonly<Record<string, number>>;
+  readonly margin?: number;
+}
+
 /** Outcome of the per-task MCP attach policy. */
 export interface McpAttachPolicy {
   /** False -> skip MCP servers entirely (built-in tools only). */
   readonly attachMcp: boolean;
   /** Human-readable reason; always logged with the decision. */
   readonly reason: string;
+  /** Tool-level policy: which servers are relevant for this task. */
+  readonly toolPolicy: McpToolLevelPolicy;
+}
+
+export interface ResolveMcpAttachPolicyOptions {
+  /** Configured MCP server names; enables the per-server subset policy. */
+  readonly serverNames?: readonly string[];
+  /** Task text; feeds label inference alongside route.taskLabels. */
+  readonly taskText?: string;
 }
 
 /**
- * Decide whether MCP servers attach for this task.
+ * Decide whether MCP servers attach for this task, and -- when the caller
+ * passes `serverNames` -- which of them are worth starting.
  *
  * Kill-switches (either forces full attach, i.e. today's behavior):
  *   1. Env: ZCODE_SPEEDSTACK_PRUNE=0
@@ -291,43 +379,151 @@ export interface McpAttachPolicy {
  *
  * Default policy (conservative, live by default): attach built-in tools
  * only when the route says tier == "economy" with confidence >= 0.8.
- * Everything else — including a missing route decision (shim down:
- * fail-open) — attaches the full MCP surface exactly like today.
+ * Otherwise every server attaches, but with a confident route the policy
+ * additionally names the per-task server subset so startup can skip
+ * clearly-irrelevant servers (fail-open: anything ambiguous keeps all).
+ * Everything else -- including a missing route decision (shim down:
+ * fail-open) -- attaches the full MCP surface exactly like today.
+ *
+ * Never throws (fail-open).
  */
+/** Preserved score signals for a tool-level policy, from the route. */
+function routeScoreSignals(route: SystemOneRouteDecision | undefined): {
+  tierScores?: Readonly<Record<string, number>>;
+  margin?: number;
+} {
+  const tierScores = route?.tierScores;
+  const margin = routeTierMargin(route);
+  return {
+    ...(tierScores ? { tierScores } : {}),
+    ...(margin !== undefined ? { margin } : {}),
+  };
+}
+
 export function resolveMcpAttachPolicy(
   route: SystemOneRouteDecision | undefined,
   config: SpeedStackSessionConfig | undefined,
+  options?: ResolveMcpAttachPolicyOptions,
 ): McpAttachPolicy {
-  if (process.env[SYSTEMONE_PRUNE_KILL_SWITCH_ENV] === "0") {
-    return {
-      attachMcp: true,
-      reason: `kill-switch: ${SYSTEMONE_PRUNE_KILL_SWITCH_ENV}=0`,
-    };
-  }
-  if (config?.mcpPruning === false) {
-    return {
-      attachMcp: true,
-      reason: "kill-switch: SpeedStackSessionConfig.mcpPruning=false",
-    };
-  }
-  if (
-    route &&
-    route.tier === "economy" &&
-    route.confidence >= SYSTEMONE_PRUNE_CONFIDENCE_THRESHOLD
-  ) {
-    return {
-      attachMcp: false,
-      reason:
+  try {
+    const scoreSignals = routeScoreSignals(route);
+    if (process.env[SYSTEMONE_PRUNE_KILL_SWITCH_ENV] === "0") {
+      const reason = `kill-switch: ${SYSTEMONE_PRUNE_KILL_SWITCH_ENV}=0`;
+      return { attachMcp: true, reason, toolPolicy: { mode: "all", reason } };
+    }
+    if (config?.mcpPruning === false) {
+      const reason = "kill-switch: SpeedStackSessionConfig.mcpPruning=false";
+      return { attachMcp: true, reason, toolPolicy: { mode: "all", reason } };
+    }
+    if (
+      route &&
+      route.tier === "economy" &&
+      route.confidence >= SYSTEMONE_PRUNE_CONFIDENCE_THRESHOLD
+    ) {
+      const reason =
         `route tier=economy confidence=${route.confidence} ` +
-        `>= ${SYSTEMONE_PRUNE_CONFIDENCE_THRESHOLD}`,
-    };
-  }
-  return {
-    attachMcp: true,
-    reason: route
+        `>= ${SYSTEMONE_PRUNE_CONFIDENCE_THRESHOLD}`;
+      return {
+        attachMcp: false,
+        reason,
+        toolPolicy: { mode: "none", reason, ...scoreSignals },
+      };
+    }
+    const serverNames = options?.serverNames ?? [];
+    if (serverNames.length > 0) {
+      const shortlist = computeServerShortlist({
+        route,
+        config,
+        taskText: options?.taskText,
+        serverNames,
+      });
+      if (shortlist.pruned) {
+        return {
+          attachMcp: true,
+          reason:
+            `route tier=${route?.tier} confidence=${route?.confidence}: ` +
+            `attaching all MCP servers, starting subset per task labels`,
+          toolPolicy: {
+            mode: "subset",
+            reason: shortlist.reason,
+            keepServers: shortlist.keepServers,
+            prunedServers: shortlist.prunedServers,
+            ...scoreSignals,
+          },
+        };
+      }
+      return {
+        attachMcp: true,
+        reason: shortlist.reason,
+        toolPolicy: { mode: "all", reason: shortlist.reason, ...scoreSignals },
+      };
+    }
+    const reason = route
       ? route.tier === "economy"
         ? `route tier=economy confidence=${route.confidence} below prune threshold ${SYSTEMONE_PRUNE_CONFIDENCE_THRESHOLD}`
         : `route tier=${route.tier} is not economy (pruning is economy-only)`
-      : "no route decision (fail-open)",
-  };
+      : "no route decision (fail-open)";
+    return { attachMcp: true, reason, toolPolicy: { mode: "all", reason } };
+  } catch {
+    const reason = "attach-policy computation threw (fail-open)";
+    return { attachMcp: true, reason, toolPolicy: { mode: "all", reason } };
+  }
+}
+
+// -- Z2: effort behavior policy ("effort means behavior") -----------------
+//
+// Companion to applySystemOneEffortOverride: where that function binds
+// reasoningLevel/maxOutputTokens, this one resolves the full behavior
+// policy (budgets, subagent allowance, verification, compaction, ...) for
+// the turn. Same thinking precedence (off/pinned/auto -> route hint);
+// thinking "off" resolves to the low policy row. Fail-open: no resolved
+// effort and no configured budgets -> empty budgets (unbounded, today's
+// behavior).
+
+/** Resolved behavior policy + effective budgets for one task. */
+export interface SystemOneBehaviorPolicyResolution {
+  /**
+   * The resolved effort tier, or undefined when nothing resolved (caller
+   * keeps today's behavior). Thinking "off" maps to "low".
+   */
+  readonly tier: EffortTier | undefined;
+  /** The behavior policy row, or undefined when no tier resolved. */
+  readonly policy: EffortBehaviorPolicy | undefined;
+  /**
+   * Effective per-turn budgets: policy-table raised defaults merged with the
+   * package-1 ZCODE_BUDGET_* env surface (env wins). {} = unbounded.
+   */
+  readonly budgets: TurnBudgets;
+}
+
+/**
+ * Resolve the effort behavior policy + effective turn budgets for the
+ * current task, alongside applySystemOneEffortOverride. Never throws.
+ */
+export function resolveSystemOneBehaviorPolicy(
+  holder: SystemOneRouteHolder,
+  env: NodeJS.ProcessEnv = process.env,
+): SystemOneBehaviorPolicyResolution {
+  try {
+    const thinking = resolveThinkingTier({
+      thinkingMode: holder.speedStackConfig?.thinkingMode,
+      explicitTier: holder.speedStackConfig?.effortTier,
+      routeHint: extractRouteEffortHint(holder.systemOneRouteValue),
+    });
+    const tier =
+      thinking?.kind === "tier"
+        ? thinking.tier
+        : thinking?.kind === "off"
+          ? ("low" as EffortTier)
+          : undefined;
+    const policy = tier ? getEffortBehaviorPolicy(tier, env) : undefined;
+    const budgets = resolveEffectiveTurnBudgets({
+      routeTier: holder.systemOneRouteValue?.tier,
+      effortTier: tier,
+      env,
+    });
+    return { tier, policy, budgets };
+  } catch {
+    return { tier: undefined, policy: undefined, budgets: {} };
+  }
 }

@@ -36,18 +36,13 @@ const MAX_ESCALATE_MODEL_BYTES = 16_000;
  * 一次一个聚焦问题、阻塞可能很久、per-ask 上限 3。
  */
 const ESCALATE_DESCRIPTION = [
-  "Escalates a question that is BLOCKING you to the main agent that created this workflow, and waits here for the answer.",
+  "Ask the main agent that created this workflow a question that is BLOCKING you, and wait here for the answer. LAST RESORT only \u2014 to ask the USER a question, use AskUserQuestion instead.",
   "",
-  "This is a LAST RESORT, for when you are genuinely stuck on something outside your reach:",
-  "- a gate that is broken or impossible to pass (a check capped at 95 when the threshold is 96);",
-  "- instructions that contradict each other, so no output can satisfy both;",
-  "- a fact you cannot obtain (a tradeoff, an external convention, what 'good' means here) that only whoever started this run knows.",
+  "Genuinely stuck means: a broken gate you cannot pass, contradictory instructions no output can satisfy, or a fact only the run\u2019s owner knows (a tradeoff, an external convention, what \u2018good\u2019 means here).",
   "",
-  "Do NOT use it for curiosity, progress reports, asking permission, confirming a conclusion you could verify yourself, or thinking out loud. None of those are blocked — keep working.",
+  "Do NOT use for curiosity, progress reports, permission, or confirming something you could verify yourself \u2014 keep working instead.",
   "",
-  "Ask ONE focused question that can be answered in a sentence, and put your evidence in `context`: what you already tried, and exactly where you are stuck. The quality of the answer depends on it.",
-  "",
-  "The cost: this call BLOCKS until the main agent answers, which may take a long time. You get at most 3 escalations per ask; the 4th tells you the budget is spent and to proceed on your own best judgement. Do not spend them on questions not worth waiting for.",
+  "Ask ONE focused question answerable in a sentence; put what you tried and exactly where you are stuck in `context`. This call BLOCKS until answered (may take a long time), and you get at most 3 escalations per ask \u2014 do not spend them on questions not worth waiting for.",
 ].join("\n");
 
 const escalateHandler: ToolHandler = async (input, context) => {

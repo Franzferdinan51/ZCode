@@ -35,12 +35,11 @@ const LIST_MODELS_MODEL_BYTES = 24_000;
 const LIST_MODELS_ERROR_CODE = { CATALOG_UNAVAILABLE: 31 } as const;
 
 const LIST_MODELS_DESCRIPTION = [
-  "Lists the models this host has configured, so a dynamic workflow's subagents can be pointed at one.",
+  "List the models this host has configured, for pointing a dynamic workflow\u2019s subagents at one.",
   "",
-  "- Each row's `id` (`providerId/modelId`) pastes verbatim into the `subagent_model` field of CreateWorkflow or AmendWorkflow. Append `$<level>` to pick a reasoning level from that row's `reasoningLevels`.",
-  "- This tool does NOT change the model you are running on. The session model is the user's choice and only the user changes it; `subagent_model` only moves the workflow's subagents.",
-  "- The model the session is on right now is marked `[current]` — setting the subagents to that one is the same as omitting the field.",
-  "- A row marked `disabled` cannot be used (no API key, disabled by policy). Resolve that with the user rather than picking around it silently.",
+  "- Each row\u2019s `id` (`providerId/modelId`) pastes verbatim into CreateWorkflow/AmendWorkflow `subagent_model`. Append `$<level>` to pick a reasoning level from that row\u2019s `reasoningLevels`.",
+  "- This does NOT change the model you are running on \u2014 the session model is the user\u2019s choice. `subagent_model` only moves the workflow\u2019s subagents; the `[current]` row is the same as omitting the field.",
+  "- A `disabled` row cannot be used (no API key, disabled by policy) \u2014 resolve with the user rather than picking around it silently.",
 ].join("\n");
 
 /**

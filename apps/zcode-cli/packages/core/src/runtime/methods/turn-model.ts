@@ -13,6 +13,7 @@ import { createRuntimeModel, withModelInvocationContext } from "./runtime-model.
 import { applyRuntimeExecutionState } from "../execution-state.js";
 import {
   applySystemOneEffortOverride,
+  resolveSystemOneBehaviorPolicy,
   resolveSystemOneModelTarget,
   type SystemOneRouteDecision,
 } from "../../speedstack/systemone-route.js";
@@ -34,6 +35,11 @@ export function createTurnModel(
   // Z1: route-driven effort override (reasoningLevel + maxOutputTokens).
   // No-op until the session's route decision has settled (fail-open).
   const routedModel = applySystemOneEffortOverride(runtime, model, runtime.logger);
+  // Z2: effort behavior policy + effective turn budgets ("effort means
+  // behavior"), resolved with the same thinking precedence as the effort
+  // override above. Fail-open, never throws; consumed by the turn loop
+  // (budgets, subagent gating, verification, compaction) and subagent.ts.
+  runtime.systemOneBehaviorPolicy = resolveSystemOneBehaviorPolicy(runtime, process.env);
   return withModelInvocationContext(routedModel, (request) => ({
     refreshRuntimeHeadersBeforeAttempt: createRefreshRuntimeHeadersBeforeModelAttempt(runtime, {
       abortSignal: request.abortSignal,

@@ -1,0 +1,261 @@
+{
+  "generated": "2026-09-23T22:44:16.979Z",
+  "generator": "speedstack/eval/measure-tool-schemas.ts",
+  "toolCount": 42,
+  "totalChars": 125126,
+  "approxTokens": 31282,
+  "tools": [
+    {
+      "name": "Agent",
+      "chars": 3100,
+      "descriptionChars": 2528,
+      "schemaChars": 567
+    },
+    {
+      "name": "AmendWorkflow",
+      "chars": 7022,
+      "descriptionChars": 4152,
+      "schemaChars": 2857
+    },
+    {
+      "name": "ApplyPatchSet",
+      "chars": 1492,
+      "descriptionChars": 670,
+      "schemaChars": 809
+    },
+    {
+      "name": "AskUserQuestion",
+      "chars": 3826,
+      "descriptionChars": 788,
+      "schemaChars": 3023
+    },
+    {
+      "name": "Bash",
+      "chars": 2394,
+      "descriptionChars": 997,
+      "schemaChars": 1393
+    },
+    {
+      "name": "CreateWorkflow",
+      "chars": 31082,
+      "descriptionChars": 27817,
+      "schemaChars": 3251
+    },
+    {
+      "name": "CronCreate",
+      "chars": 3307,
+      "descriptionChars": 458,
+      "schemaChars": 2839
+    },
+    {
+      "name": "CronDelete",
+      "chars": 363,
+      "descriptionChars": 115,
+      "schemaChars": 238
+    },
+    {
+      "name": "CronList",
+      "chars": 235,
+      "descriptionChars": 108,
+      "schemaChars": 119
+    },
+    {
+      "name": "CronUpdate",
+      "chars": 2151,
+      "descriptionChars": 135,
+      "schemaChars": 2006
+    },
+    {
+      "name": "Edit",
+      "chars": 1031,
+      "descriptionChars": 475,
+      "schemaChars": 552
+    },
+    {
+      "name": "EnterPlanMode",
+      "chars": 869,
+      "descriptionChars": 737,
+      "schemaChars": 119
+    },
+    {
+      "name": "escalate",
+      "chars": 1229,
+      "descriptionChars": 790,
+      "schemaChars": 431
+    },
+    {
+      "name": "EvalWorkflowSnippet",
+      "chars": 9933,
+      "descriptionChars": 9149,
+      "schemaChars": 765
+    },
+    {
+      "name": "ExitPlanMode",
+      "chars": 1230,
+      "descriptionChars": 464,
+      "schemaChars": 754
+    },
+    {
+      "name": "GetWorkflowRun",
+      "chars": 2740,
+      "descriptionChars": 2446,
+      "schemaChars": 280
+    },
+    {
+      "name": "Glob",
+      "chars": 761,
+      "descriptionChars": 218,
+      "schemaChars": 539
+    },
+    {
+      "name": "Grep",
+      "chars": 3208,
+      "descriptionChars": 532,
+      "schemaChars": 2672
+    },
+    {
+      "name": "js",
+      "chars": 1402,
+      "descriptionChars": 564,
+      "schemaChars": 836
+    },
+    {
+      "name": "ListModels",
+      "chars": 745,
+      "descriptionChars": 616,
+      "schemaChars": 119
+    },
+    {
+      "name": "ListSavedWorkflows",
+      "chars": 935,
+      "descriptionChars": 798,
+      "schemaChars": 119
+    },
+    {
+      "name": "ListWorkflowRuns",
+      "chars": 2807,
+      "descriptionChars": 2237,
+      "schemaChars": 554
+    },
+    {
+      "name": "OffPeakCreate",
+      "chars": 2038,
+      "descriptionChars": 470,
+      "schemaChars": 1555
+    },
+    {
+      "name": "OffPeakList",
+      "chars": 218,
+      "descriptionChars": 88,
+      "schemaChars": 119
+    },
+    {
+      "name": "Read",
+      "chars": 1466,
+      "descriptionChars": 884,
+      "schemaChars": 578
+    },
+    {
+      "name": "ReadSessionContext",
+      "chars": 1074,
+      "descriptionChars": 289,
+      "schemaChars": 767
+    },
+    {
+      "name": "ResolveWorkflowQuestion",
+      "chars": 1453,
+      "descriptionChars": 977,
+      "schemaChars": 453
+    },
+    {
+      "name": "RespondToCoordinator",
+      "chars": 531,
+      "descriptionChars": 130,
+      "schemaChars": 381
+    },
+    {
+      "name": "ResumeWorkflowRun",
+      "chars": 1934,
+      "descriptionChars": 1580,
+      "schemaChars": 337
+    },
+    {
+      "name": "SaveWorkflow",
+      "chars": 24593,
+      "descriptionChars": 22068,
+      "schemaChars": 2513
+    },
+    {
+      "name": "SearchAndRead",
+      "chars": 1462,
+      "descriptionChars": 521,
+      "schemaChars": 928
+    },
+    {
+      "name": "SendMessage",
+      "chars": 967,
+      "descriptionChars": 437,
+      "schemaChars": 519
+    },
+    {
+      "name": "Skill",
+      "chars": 1027,
+      "descriptionChars": 695,
+      "schemaChars": 327
+    },
+    {
+      "name": "submit_result",
+      "chars": 361,
+      "descriptionChars": 111,
+      "schemaChars": 237
+    },
+    {
+      "name": "Task",
+      "chars": 801,
+      "descriptionChars": 230,
+      "schemaChars": 567
+    },
+    {
+      "name": "TaskOutput",
+      "chars": 1020,
+      "descriptionChars": 578,
+      "schemaChars": 432
+    },
+    {
+      "name": "TaskStop",
+      "chars": 571,
+      "descriptionChars": 286,
+      "schemaChars": 277
+    },
+    {
+      "name": "TodoRead",
+      "chars": 234,
+      "descriptionChars": 107,
+      "schemaChars": 119
+    },
+    {
+      "name": "TodoWrite",
+      "chars": 1140,
+      "descriptionChars": 453,
+      "schemaChars": 678
+    },
+    {
+      "name": "WebFetch",
+      "chars": 778,
+      "descriptionChars": 455,
+      "schemaChars": 315
+    },
+    {
+      "name": "WebSearch",
+      "chars": 876,
+      "descriptionChars": 399,
+      "schemaChars": 468
+    },
+    {
+      "name": "Write",
+      "chars": 720,
+      "descriptionChars": 367,
+      "schemaChars": 348
+    }
+  ]
+}

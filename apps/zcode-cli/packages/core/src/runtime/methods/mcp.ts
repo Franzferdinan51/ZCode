@@ -60,8 +60,11 @@ export function startMcpStartup(
   // Kill-switches: ZCODE_SPEEDSTACK_PRUNE=0 env, or
   // SpeedStackSessionConfig.mcpPruning=false. Every pruning decision is
   // logged below with the skipped servers and the reason.
-  const mcpPolicy = resolveMcpAttachPolicy(this.systemOneRouteValue, this.speedStackConfig);
   const configuredServers = this.config.mcp?.servers ?? {};
+  const mcpPolicy = resolveMcpAttachPolicy(this.systemOneRouteValue, this.speedStackConfig, {
+    serverNames: Object.keys(configuredServers),
+    taskText: this.systemOneRouteTaskText,
+  });
   let servers = configuredServers;
   if (!mcpPolicy.attachMcp) {
     const skippedServers = Object.keys(configuredServers);
@@ -91,6 +94,27 @@ export function startMcpStartup(
       });
     }
     servers = prunedServers;
+  }
+  // Z1 tool-pack subset: with a confident route, skip starting MCP servers
+  // whose capability the task labels don't need. Unknown servers fail open
+  // (kept). Pruned servers are recorded for on-demand startup if a later
+  // tool-miss needs them (ensureToolPackPrunedMcpServersStarted).
+  if (mcpPolicy.attachMcp && mcpPolicy.toolPolicy.mode === "subset") {
+    const keepServers = new Set(mcpPolicy.toolPolicy.keepServers ?? []);
+    const subsetSkipped = Object.keys(servers).filter((name) => !keepServers.has(name));
+    if (subsetSkipped.length > 0) {
+      this.systemOneToolPackPrunedServers = subsetSkipped;
+      this.logger?.info("MCP servers skipped by tool-pack subset policy", {
+        ...traceContextToLogContext(traceContext),
+        event: "mcp.servers.pruned",
+        module: "core.runtime",
+        reason: mcpPolicy.toolPolicy.reason,
+        skippedServers: subsetSkipped,
+      });
+      servers = Object.fromEntries(
+        Object.entries(servers).filter(([name]) => keepServers.has(name)),
+      );
+    }
   }
   if (Object.keys(servers).length === 0) {
     const startup = Promise.all([this.mcpPort.status(), this.mcpPort.listTools()])
@@ -229,4 +253,70 @@ export async function initializeMcp(
     });
   }
   this.mcpToolsRegistered = true;
+}
+
+/**
+ * Z1 tool-miss recovery: start the MCP servers the tool-pack subset policy
+ * pruned at startup, and register their tools (honoring the session
+ * mcpToolAllowlist). One-shot per session: the pruned list is cleared before
+ * connecting so a failure can't wedge retries. Never throws.
+ */
+export async function ensureToolPackPrunedMcpServersStarted(
+  this: AgentRuntimeInternal,
+  traceContext: TraceContext,
+): Promise<void> {
+  const prunedServers = this.systemOneToolPackPrunedServers;
+  if (!prunedServers || prunedServers.length === 0) return;
+  const mcpPort = this.mcpPort;
+  if (!mcpPort) return;
+  this.systemOneToolPackPrunedServers = undefined;
+  const configuredServers = this.config.mcp?.servers ?? {};
+  try {
+    const snapshot = await mcpPort.connectConfiguredServers(configuredServers, {
+      oauthAuthorizationTimeoutMs: MCP_SESSION_OAUTH_AUTHORIZATION_TIMEOUT_MS,
+      trace: traceContext,
+      workingDirectory: this.workingDirectory,
+      workspaceIdentity: this.config.workspaceIdentity?.toString(),
+    });
+    const prunedSet = new Set(prunedServers);
+    const freshTools = snapshot.tools.filter((tool) => prunedSet.has(tool.serverName));
+    const prunableTools = freshTools.map((tool, index) => ({
+      index,
+      name: tool.name ?? tool.toolName,
+      serverName: tool.serverName,
+    }));
+    const keptIndexes = new Set(
+      pruneMcpTools(prunableTools, this.speedStackConfig.mcpToolAllowlist).map(
+        (tool) => tool.index,
+      ),
+    );
+    const attachTools = freshTools.filter((_, index) => keptIndexes.has(index));
+    const registered = registerMcpTools(this.registry, mcpPort, attachTools, {
+      allowedTools: this.config.toolAllowlist,
+      disallowedTools: this.config.toolDisallowlist,
+      officialCuaServerNames: computeOfficialCuaServerNames(
+        this.config.mcp?.servers ?? {},
+        new Set(this.config.mcp?.trustedOfficialCuaServerNames ?? []),
+      ),
+    });
+    if (registered.length > 0) {
+      this.invalidateToolCache();
+    }
+    this.logger?.info("Tool-pack recovery: pruned MCP servers started", {
+      ...traceContextToLogContext(traceContext),
+      event: "mcp.servers.tool_pack_recovered",
+      module: "core.runtime",
+      registeredToolCount: registered.length,
+      serverCount: prunedServers.length,
+      status: "completed",
+    });
+  } catch (error) {
+    this.logger?.warn("Tool-pack MCP recovery failed", {
+      ...traceContextToLogContext(traceContext),
+      error: error instanceof Error ? error.message : String(error),
+      event: "mcp.servers.tool_pack_recovery_failed",
+      module: "core.runtime",
+      status: "failed",
+    });
+  }
 }

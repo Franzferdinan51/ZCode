@@ -53,7 +53,7 @@ export const respondToCoordinatorToolEntry: ToolEntry = {
   capability: "Respond to the coordinator that owns this subagent",
   metadata: {
     name: RESPOND_TO_COORDINATOR_TOOL_NAME,
-    description: "Respond to the coordinator that owns this subagent.",
+    description: "Reply to the coordinator agent that owns this subagent \u2014 for status updates and final handoff. The coordinator relays to the user.",
     modelInstructions: [
       'When you receive "The coordinator sent a message while you were working:" (or the legacy "Message from coordinator:" prefix), use this tool to answer it.',
       "Use this tool for a concise response or progress update to the coordinator.",

@@ -34,9 +34,11 @@ import {
 } from "./tool-perf.js";
 
 const WRITE_PROVIDER_DESCRIPTION = [
-  "Writes a file to the local filesystem, overwriting if one exists.",
+  "Writes a file to the local filesystem, creating it or fully replacing its contents.",
   "",
-  "When to use: creating a new file, or fully replacing one you've already Read. Overwriting an existing file you haven't Read will fail. For partial changes, use Edit instead.",
+  "- For new files, or replacing a whole file you already Read. Overwriting a file you have NOT Read fails — Read it first.",
+  "- For partial changes to an existing file, use Edit instead.",
+  "- After a successful write the file state is current in your context; do not Read it back to verify.",
 ].join("\n");
 
 const WRITE_STORAGE_SUFFIX =

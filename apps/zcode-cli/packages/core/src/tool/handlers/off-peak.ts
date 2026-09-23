@@ -185,7 +185,7 @@ export const offPeakCreateToolEntry: ToolEntry = {
   metadata: {
     name: "OffPeakCreate",
     description:
-      "Create a one-off idle-time task in the current workspace: it takes a queue ticket immediately and later runs unattended in THIS session (with the full conversation history) when the server grants off-peak compute, at no plan-quota cost. There is no guaranteed start time. Unlike CronCreate (recurring or clock-scheduled work), use this for deferrable work the user wants done cheaply 'when compute is idle'. The prompt must describe the final work directly and must never ask the run to create, schedule, or configure another idle-time task or automation.",
+      "Create a one-off idle-time task: takes a queue ticket now, runs unattended in THIS session (full conversation history) when the server grants off-peak compute, at no plan-quota cost. No guaranteed start time. For deferrable work the user wants done cheaply 'when compute is idle'; for anything clock-scheduled or recurring use CronCreate instead. The prompt must describe the final work directly and must never ask the run to create another idle-time task or automation.",
     modelInstructions: [
       "Use this only when the user explicitly asks for idle-time/off-peak execution (闲时任务/闲时执行/低峰跑), or explicitly accepts deferring the work to the free idle-time queue.",
       "Choose CronCreate instead for anything time-scheduled or recurring ('every day at 9', 'in 10 minutes'). OffPeakCreate has no clock: the server decides when the task starts.",

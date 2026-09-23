@@ -20,7 +20,7 @@ import type { ToolEntry, ToolHandler } from "../types.js";
 const MAX_GLOB_RESULTS = 100;
 const MAX_GLOB_MODEL_BYTES = 100_000;
 const GLOB_TOOL_DESCRIPTION =
-  'Fast file pattern matching. Supports glob patterns like "**/*.js" or "src/**/*.ts". Returns matching file paths sorted by modification time.';
+  'Find files by NAME with glob patterns like "**/*.js" or "src/**/*.ts". Returns matching paths sorted by modification time. For file-name lookup only — to search file CONTENTS use Grep. Prefer this over `find` via Bash.';
 
 const globHandler: ToolHandler = async (input, context) => {
   const { pattern, path } = GlobInputSchema.parse(input) as GlobInput;

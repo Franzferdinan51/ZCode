@@ -298,6 +298,7 @@ function buildJsToolDescription(options: NodeReplToolOptions = {}): string {
   const base =
     "Run JavaScript in a persistent Node REPL session. Pass the JavaScript as the `code` argument " +
     "(this tool has NO `command` parameter — that is Bash; sending `command` fails input schema validation). " +
+    "For shell commands use Bash; for file search use Glob/Grep. " +
     "Always provide the required `title` argument as a short user-facing description in the user's language. " +
     "Top-level await is supported; " +
     "top-level `const`/`let`/`var`/`function`/`class` declarations persist across calls, " +

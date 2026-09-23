@@ -36,7 +36,9 @@ import type {
   ContextBuildResult,
 } from "./deps.js";
 import type { SpeedStackSessionConfig } from "../speedstack/effort-tiers.js";
+import type { BoundaryCompactEventKind } from "../speedstack/anchored-compaction.js";
 import type { SystemOneRouteDecision } from "../speedstack/systemone-route.js";
+import type { SystemOneBehaviorPolicyResolution } from "../speedstack/systemone-route.js";
 import type {
   ActiveTurnSteeringState,
   ActiveTurnStartReservation,
@@ -104,8 +106,24 @@ export interface AgentRuntimeInternal
   mcpToolsRegistered: boolean;
   /** Normalized SpeedStackSessionConfig (model routing, thinking mode, MCP pruning). */
   speedStackConfig: SpeedStackSessionConfig;
+  /**
+   * Z3: Rank 4 boundary-compact event noted this turn ("plan-stage" /
+   * "tests-passed" / "subtask-verified"). One-shot: the loop clears it
+   * after the boundary-compact check.
+   */
+  speedStackPendingBoundaryEvent?: BoundaryCompactEventKind | undefined;
   /** Settled route decision for the current task; undefined until fetched or when fail-open. */
   systemOneRouteValue?: SystemOneRouteDecision | undefined;
+  /** Z2: resolved effort behavior policy + effective turn budgets (set by createTurnModel; the turn loop resolves its own copy per turn). */
+  systemOneBehaviorPolicy?: SystemOneBehaviorPolicyResolution | undefined;
+  /** Raw task text for the current route decision; feeds tool-pack label inference. */
+  systemOneRouteTaskText?: string | undefined;
+  /**
+   * MCP servers pruned at startup by the tool-pack subset policy (Z1).
+   * Started on demand by ensureToolPackPrunedMcpServersStarted when a
+   * tool-miss triggers fail-open recovery.
+   */
+  systemOneToolPackPrunedServers?: string[] | undefined;
   /**
    * Per-turn SystemOne routing facts for transparency surfaces (UI chip,
    * headless logs): the route's tier/effort, whether model routing was on,

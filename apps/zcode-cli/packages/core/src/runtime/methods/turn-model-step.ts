@@ -39,6 +39,10 @@ import type {
 import type { AgentRuntimeInternal } from "../internal.js";
 import { executeToolCallsForModelStep } from "./turn-tools.js";
 import {
+  detectTurnToolPackMissedCalls,
+  recoverTurnToolPackMiss,
+} from "./tool-packs.js";
+import {
   captureAssistantPersistenceAnchor,
   finishModelStepWithoutToolCalls,
   persistCompletedAssistantStep,
@@ -465,6 +469,19 @@ async function runModelBackedTurnStepImpl(
     state.modelResponse = buildAutomationCreateLimitFallback(state.input);
   } else if (state.automationCreateLimitReached && state.modelResponse.trim().length === 0) {
     state.modelResponse = buildAutomationCreateLimitFallback(state.input);
+  }
+  // Z1 tool-pack miss recovery: the model called a tool whose schema was
+  // pruned from this step's request. Fail open to the full tool set for the
+  // rest of the turn; the missed calls are withheld from execution (their
+  // inputs were composed without a schema) and the model is told to retry
+  // them on the next step, which will carry the complete schemas.
+  const toolPackMissedToolNames = detectTurnToolPackMissedCalls(state, toolCalls);
+  if (toolPackMissedToolNames.length > 0) {
+    await recoverTurnToolPackMiss.call(this, state, toolPackMissedToolNames);
+    const missedToolNameSet = new Set(toolPackMissedToolNames);
+    toolCalls = toolCalls.filter(
+      (toolCall) => toolCall.providerExecuted || !missedToolNameSet.has(toolCall.name),
+    );
   }
   const usage = result.usage ?? {};
   const responseLength = state.modelResponse.length;

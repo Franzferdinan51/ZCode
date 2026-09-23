@@ -16,12 +16,10 @@ const MAX_TASK_STOP_MODEL_BYTES = 100_000;
 // provider 请求直接使用 metadata.description，内部短说明会让模型看不到
 // 参数、返回值和使用时机。capability 继续保留短说明。
 const TASK_STOP_PROVIDER_DESCRIPTION = [
+  "Stop a running background task by its ID; returns success or failure.",
   "",
-  "- Stops a running background task by its ID",
-  "- Takes a task_id parameter identifying the task to stop",
-  "- Returns a success or failure status",
-  "- Use this tool when you need to terminate a long-running task",
-  "",
+  "- Use to terminate a long-running task you started that is stuck or no longer needed.",
+  "- Prefer letting tasks settle on their own \u2014 you are notified when they complete; do not poll TaskOutput in a loop while waiting.",
 ].join("\n");
 
 const taskStopHandler: ToolHandler = async (input, context) => {

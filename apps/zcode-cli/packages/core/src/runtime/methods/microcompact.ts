@@ -16,6 +16,7 @@ import { maybeLocalMicrocompactRuntimeEntries, throwIfTurnAborted } from "../hel
 import type { AgentRuntimeInternal } from "../internal.js";
 import { resolveNormalRequestMaxOutputTokens } from "./model-token-limits.js";
 import type { TurnRequestState } from "./turn-loop-state.js";
+import { archivePreCompactTranscript } from "./anchored-compact-prep.js";
 import {
   filterOutputTokenContinuationEntries,
   preserveCanonicalContextPrefix,
@@ -77,7 +78,16 @@ export async function microcompactIfNeeded(
       recordableEntries,
     ),
   );
+  // Z3: archive the pre-compact transcript + anchors before the bulk is
+  // dropped locally. Fail-open; rotation caps disk use.
+  const preCompactEntries = context.turnRequestState.entries;
   context.turnRequestState.entries = result.entries;
+  await archivePreCompactTranscript(this, {
+    entries: preCompactEntries,
+    reason: "microcompact",
+    sessionId: this.sessionId,
+    traceContext: turnTraceContext,
+  });
 
   const payload = {
     ...result.payload,

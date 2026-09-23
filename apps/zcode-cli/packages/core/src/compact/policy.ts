@@ -84,7 +84,14 @@ export function getAutoCompactOutputReserveTokens(config: AutoCompactPolicyConfi
 export function getAutoCompactThreshold(config: AutoCompactPolicyConfig = {}): number {
   const effectiveContextWindow = getEffectiveContextWindowSize(config);
   const buffer = positiveInt(config.bufferTokens) ?? AUTOCOMPACT_BUFFER_TOKENS;
-  return Math.max(0, effectiveContextWindow - buffer);
+  const base = Math.max(0, effectiveContextWindow - buffer);
+  // Z2: effort-policy compaction aggressiveness. A thresholdPercentOverride
+  // below 100 compacts earlier (e.g. 85 = 85% of the normal threshold).
+  // Unset/invalid fails open to the base threshold.
+  const percent = config.thresholdPercentOverride;
+  if (percent === undefined) return base;
+  if (!Number.isFinite(percent) || percent <= 0) return base;
+  return Math.max(0, Math.floor((base * percent) / 100));
 }
 
 export function shouldAutoCompact(input: {

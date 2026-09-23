@@ -40,6 +40,10 @@ import type {
   ReactiveCompactLoopContext,
 } from "./turn-loop-state.js";
 import { recordTurnUsageFact } from "./usage-observability.js";
+import {
+  resolveBoundaryWatermark,
+  type BoundaryCompactEventKind,
+} from "../../speedstack/anchored-compaction.js";
 import { findLatestCommittedAssistantUsage } from "./turn-model-step-usage.js";
 
 export async function executeManualCompact(
@@ -197,6 +201,15 @@ export async function autoCompactIfNeeded(
       modelMaxOutputTokens: context.model.optionSpecs.maxOutputTokens.max,
     }),
     modelContextBudgetStrategy: this.config.modelContextBudgetStrategy,
+    // Z2: effort-policy compaction aggressiveness. This makes the
+    // (previously accepted-but-ignored) thresholdPercentOverride functional.
+    ...(context.compactionAggressiveness !== undefined &&
+    context.compactionAggressiveness > 0 &&
+    context.compactionAggressiveness !== 1
+      ? {
+          thresholdPercentOverride: context.compactionAggressiveness * 100,
+        }
+      : {}),
   };
   const activeEntries = context.turnRequestState.entries;
   const activeProjection = buildRuntimeProviderRequestMessages(this, {
@@ -300,6 +313,152 @@ export async function autoCompactIfNeeded(
       errorMessage: error instanceof Error ? error.message : String(error),
       event: "compact.auto.failed",
       failureCount: this.autoCompactConsecutiveFailures,
+      compactReason: context.compactReason,
+      modelStepIndex: context.modelStepIndex,
+      module: "core.runtime",
+      phase: context.phase,
+      ...autoCompactDecisionLogContext(decision),
+    });
+    return "failed";
+  }
+}
+
+/**
+ * Z3: Rank 4 boundary-triggered compaction. After a plan stage, passing
+ * tests, or a verified subtask, compaction may run at a LOWER watermark
+ * (default 55%) than the emergency threshold so the fresh agent sees the
+ * new state sooner. Same invocation path as auto-compact, different
+ * event names; never throws past turn-cancellation.
+ */
+export async function boundaryCompactIfNeeded(
+  this: AgentRuntimeInternal,
+  turnTraceContext: TraceContext,
+  events: SessionEvent[],
+  abortSignal: AbortSignal | undefined,
+  context: AutoCompactLoopContext & { boundaryEvent: BoundaryCompactEventKind },
+): Promise<AutoCompactOutcome> {
+  throwIfTurnAborted(abortSignal);
+
+  const watermark = resolveBoundaryWatermark();
+  const config: AutoCompactPolicyConfig = {
+    contextWindow: context.model.properties.contextWindow,
+    ...this.config.compact,
+    maxOutputTokens: resolveNormalRequestMaxOutputTokens({
+      modelMaxOutputTokens: context.model.optionSpecs.maxOutputTokens.max,
+    }),
+    modelContextBudgetStrategy: this.config.modelContextBudgetStrategy,
+    // Z3: boundary events compact earlier than emergency compaction.
+    thresholdPercentOverride: watermark * 100,
+  };
+  const activeEntries = context.turnRequestState.entries;
+  const activeProjection = buildRuntimeProviderRequestMessages(this, {
+    entries: activeEntries,
+    applyCacheControl: false,
+    model: context.model,
+  });
+  const { messages: activeMessages, sourceEntries } = activeProjection;
+  const tokenOverride = buildProviderUsageTokenOverride(activeMessages, sourceEntries);
+  const decision = shouldAutoCompact({
+    messages: activeMessages,
+    config,
+    consecutiveFailures: this.autoCompactConsecutiveFailures,
+    tokenOverride,
+  });
+
+  if (!decision.shouldCompact) {
+    this.logger?.debug("Boundary compact skipped", {
+      ...traceContextToLogContext(turnTraceContext),
+      event: "compact.boundary.skipped",
+      module: "core.runtime",
+      boundaryEvent: context.boundaryEvent,
+      boundaryWatermark: watermark,
+      compactReason: context.compactReason,
+      modelStepIndex: context.modelStepIndex,
+      phase: context.phase,
+      reason: decision.reason,
+      ...autoCompactDecisionLogContext(decision),
+    });
+    return "skipped";
+  }
+
+  if (context.rapidRefill.shouldBlock) {
+    this.logger?.warn("Boundary compact rapid-refill breaker tripped", {
+      ...traceContextToLogContext(turnTraceContext),
+      event: "compact.rapid_refill_breaker",
+      compactReason: context.compactReason,
+      consecutiveRapidRefills: context.rapidRefill.consecutiveRapidRefills,
+      modelStepIndex: context.modelStepIndex,
+      module: "core.runtime",
+      boundaryEvent: context.boundaryEvent,
+      phase: context.phase,
+      status: "failed",
+      toolTurnsSinceCompact: context.rapidRefill.toolTurnsSinceCompact,
+      trigger: CompactTrigger.Auto,
+      ...autoCompactDecisionLogContext(decision),
+    });
+    return "rapid_refill_blocked";
+  }
+
+  this.logger?.info("Boundary compact started", {
+    ...traceContextToLogContext(turnTraceContext),
+    event: "compact.boundary.started",
+    boundaryEvent: context.boundaryEvent,
+    boundaryWatermark: watermark,
+    compactReason: context.compactReason,
+    modelStepIndex: context.modelStepIndex,
+    module: "core.runtime",
+    phase: context.phase,
+    ...autoCompactDecisionLogContext(decision),
+  });
+
+  try {
+    const compactResult = await this.compactActiveConversation(
+      undefined,
+      turnTraceContext,
+      events,
+      {
+        abortSignal,
+        compactContextTelemetry: {
+          inputTokens: decision.tokenCount,
+          policyContextWindowTokens: decision.contextWindow,
+          thresholdTokens: decision.threshold,
+          tokenSource: decision.tokenSource,
+        },
+        autoCompactThreshold: decision.threshold,
+        compactReason: context.compactReason,
+        phase: context.phase,
+        trigger: CompactTrigger.Auto,
+        activeEntries,
+        ...(context.model ? { model: context.model } : {}),
+      },
+    );
+    if (compactResult.outcome === "skipped") {
+      return "skipped";
+    }
+    context.turnRequestState.entries = compactResult.entries;
+    this.autoCompactConsecutiveFailures = 0;
+    this.logger?.info("Boundary compact completed", {
+      ...traceContextToLogContext(turnTraceContext),
+      event: "compact.boundary.completed",
+      boundaryEvent: context.boundaryEvent,
+      compactReason: context.compactReason,
+      modelStepIndex: context.modelStepIndex,
+      module: "core.runtime",
+      phase: context.phase,
+      ...autoCompactDecisionLogContext(decision),
+    });
+    return "compacted";
+  } catch (error) {
+    if (isTurnCancellationError(error, abortSignal)) {
+      throw error;
+    }
+    this.autoCompactConsecutiveFailures++;
+    this.logger?.warn("Boundary compact failed", {
+      ...traceContextToLogContext(turnTraceContext),
+      errorMessage: error instanceof Error ? error.message : String(error),
+      event: "compact.boundary.failed",
+      failureCount: this.autoCompactConsecutiveFailures,
+      boundaryEvent: context.boundaryEvent,
       compactReason: context.compactReason,
       modelStepIndex: context.modelStepIndex,
       module: "core.runtime",

@@ -17,6 +17,7 @@ import {
   getUsageTotalTokens,
 } from "../deps.js";
 import type { SessionEvent, TraceContext } from "../deps.js";
+import { prepareAnchoredCompaction } from "./anchored-compact-prep.js";
 import { resolveModelRequestSessionTypeFromTaskType } from "./model-request-session-type.js";
 import {
   defaultCompactPhaseForTrigger,
@@ -237,6 +238,18 @@ async function compactActiveConversationImpl(
     };
   }
 
+  // Z3: anchored compaction — archive the full transcript, extract anchors,
+  // and inject them into the summarizer prompt. Fail-open: undefined keeps
+  // the normal compact path.
+  const anchoredPrep = await prepareAnchoredCompaction(this, {
+    customInstructions,
+    entries: entriesToSummarize,
+    sessionId: this.sessionId,
+    traceContext: turnTraceContext,
+  });
+  const effectiveCustomInstructions =
+    anchoredPrep?.instructions ?? customInstructions;
+
   const compactStartedPayload = this.buildCompactTimelinePayload(compactTimeline, {
     ...(maxAttempts > 1 ? { attempt, maxAttempts } : {}),
     status: CompactTimelineStatus.Started,
@@ -265,7 +278,7 @@ async function compactActiveConversationImpl(
           querySource: "compact",
         },
       });
-      const compactPrompt = buildCompactPrompt(customInstructions);
+      const compactPrompt = buildCompactPrompt(effectiveCustomInstructions);
       let result: RuntimeModelTextResult;
       let compactPromptTooLongAttempts = 0;
       let stripMediaForSummary = false;

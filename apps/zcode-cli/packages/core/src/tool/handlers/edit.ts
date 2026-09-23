@@ -50,11 +50,11 @@ import {
 } from "./tool-perf.js";
 
 const EDIT_PROVIDER_DESCRIPTION = [
-  "Performs exact string replacement in a file.",
+  "Makes an exact string replacement in a file. For surgical changes; use Write to replace a whole file.",
   "",
-  "- You must Read the file in this conversation before editing, or the call will fail.",
-  "- `old_string` must match the file exactly, including indentation, and be unique — the edit fails otherwise. Strip the Read line prefix (line number + tab) before matching.",
-  "- `replace_all: true` replaces every occurrence instead.",
+  "- You must Read the file in this conversation first, or the call fails.",
+  "- `old_string` must match exactly (including indentation) and be unique; strip the Read line-number prefix before matching. `replace_all: true` replaces every occurrence instead.",
+  "- Do NOT re-read the file afterward to verify — a failed edit errors, and unchanged re-reads are flagged as wasted calls.",
 ].join("\n");
 const NON_UNIQUE_OLD_STRING_MESSAGE =
   "old_string is not unique in the file. Provide more surrounding context or set replace_all to true.";
@@ -81,7 +81,58 @@ function formatEditModelContent(output: unknown): string {
   return `The file ${filePath} has been updated successfully${modifiedNote}.${freshnessSuffix}`;
 }
 
-const editHandler: ToolHandler = async (input, context) => {
+// -----------------------------------------------
+// Shared edit validation (also used by ApplyPatchSet)
+// -----------------------------------------------
+
+/** Options for {@link validateEditPatch}. */
+export interface ValidateEditPatchOptions {
+  /**
+   * Skip the read-before-edit state check. Reserved for the ApplyPatchSet
+   * workflow tool: it validates every old_string against LIVE file content
+   * immediately before writing, which subsumes the check's purpose -- the
+   * model cannot write stale content it never saw, because the exact match
+   * it supplies must exist in the current file. The Edit tool never sets this.
+   */
+  skipReadStateCheck?: boolean;
+  /** Tool name used in error context. Defaults to "Edit". */
+  toolName?: string;
+}
+
+/** One exact-string patch validated against live content, ready to write. */
+export interface ValidatedEditPatch {
+  context: ToolExecutionContext;
+  filePath: string;
+  inputFilePath: string;
+  originalFile: string;
+  actualOldString: string;
+  actualNewString: string;
+  newContent: string;
+  read?: FileSystemReadTextResult;
+  replaceAll: boolean;
+  fsReadMs: number;
+  patchMatchMs: number;
+  matchAttempts: number;
+  matchStrategy?: string;
+  matchCandidateCount?: number;
+}
+
+export type ValidateEditPatchResult =
+  | { ok: true; patch: ValidatedEditPatch }
+  | { ok: false; failure: ToolHandlerFailure };
+
+/**
+ * Validate one exact-string edit against live file content WITHOUT
+ * writing anything. This is the Edit handler's read + match phase,
+ * extracted so ApplyPatchSet can validate a whole set of patches
+ * atomically (every patch validated before any write happens).
+ */
+export async function validateEditPatch(
+  input: unknown,
+  context: ToolExecutionContext,
+  options: ValidateEditPatchOptions = {},
+): Promise<ValidateEditPatchResult> {
+  const toolName = options.toolName ?? "Edit";
   const { file_path, old_string, new_string, replace_all } = EditInputSchema.parse(
     input,
   ) as EditInput;
@@ -90,19 +141,24 @@ const editHandler: ToolHandler = async (input, context) => {
   if (!fileSystemPort) {
     throw createCoreError(
       CoreErrorType.ConfigurationError,
-      "FileSystemPort is not configured for Edit tool",
+      `FileSystemPort is not configured for ${toolName} tool`,
       {
         context: {
           toolCallId: context.toolCallId,
-          toolName: "Edit",
+          toolName,
         },
         recoverable: false,
       },
     );
   }
 
+  const invalid = (errorCode: number, message: string): ValidateEditPatchResult => ({
+    ok: false,
+    failure: editFailure(errorCode, message),
+  });
+
   if (old_string === new_string) {
-    return editFailure(
+    return invalid(
       EditErrorCode.NO_CHANGE,
       "No changes to make: old_string and new_string are exactly the same.",
     );
@@ -111,7 +167,7 @@ const editHandler: ToolHandler = async (input, context) => {
   if (!file_path) {
     // 空路径由共享 path-policy 抛出普通异常，绕过了 Edit 自己维护的
     // code + message 失败契约，导致 provider-visible 内容丢失 tool_use_error envelope。
-    return editFailure(EditErrorCode.INVALID_PATH, "Tool path must not be empty");
+    return invalid(EditErrorCode.INVALID_PATH, "Tool path must not be empty");
   }
 
   const filePath = resolveWorkspacePath({
@@ -124,29 +180,32 @@ const editHandler: ToolHandler = async (input, context) => {
   const stat = await statEditableFile(filePath, context);
   if (!stat) {
     if (old_string === "") {
-      return writeEditResult({
-        context,
-        filePath,
-        inputFilePath: file_path,
-        originalFile: "",
-        actualOldString: "",
-        actualNewString: new_string,
-        newContent: new_string,
-        replaceAll: replace_all,
-        fsReadMs: 0,
-        patchMatchMs: 0,
-        matchAttempts: 0,
-      });
+      return {
+        ok: true,
+        patch: {
+          context,
+          filePath,
+          inputFilePath: file_path,
+          originalFile: "",
+          actualOldString: "",
+          actualNewString: new_string,
+          newContent: new_string,
+          replaceAll: replace_all,
+          fsReadMs: 0,
+          patchMatchMs: 0,
+          matchAttempts: 0,
+        },
+      };
     }
 
-    return editFailure(
+    return invalid(
       EditErrorCode.FILE_NOT_EXIST,
       await createMissingEditFileMessage(filePath, context),
     );
   }
 
   if (stat.sizeBytes > MAX_EDIT_FILE_SIZE_BYTES) {
-    return editFailure(
+    return invalid(
       EditErrorCode.FILE_TOO_LARGE,
       "File is too large to edit (1GB). Maximum editable file size is 1GB.",
     );
@@ -167,38 +226,45 @@ const editHandler: ToolHandler = async (input, context) => {
 
   if (old_string === "") {
     if (content.trim() !== "") {
-      return editFailure(
+      return invalid(
         EditErrorCode.FILE_EXISTS_NO_OLD_STRING,
         "Cannot create new file - file already exists.",
       );
     }
-    const readStateFailure = getEditableReadStateFailure(filePath, read, context.readFileState);
-    if (readStateFailure) return readStateFailure;
-    return writeEditResult({
-      context,
-      filePath,
-      inputFilePath: file_path,
-      originalFile: content,
-      actualOldString: "",
-      actualNewString: requestedNewString,
-      newContent: requestedNewString,
-      read,
-      replaceAll: replace_all,
-      fsReadMs,
-      patchMatchMs: 0,
-      matchAttempts: 0,
-    });
+    if (!options.skipReadStateCheck) {
+      const readStateFailure = getEditableReadStateFailure(filePath, read, context.readFileState);
+      if (readStateFailure) return { ok: false, failure: readStateFailure };
+    }
+    return {
+      ok: true,
+      patch: {
+        context,
+        filePath,
+        inputFilePath: file_path,
+        originalFile: content,
+        actualOldString: "",
+        actualNewString: requestedNewString,
+        newContent: requestedNewString,
+        read,
+        replaceAll: replace_all,
+        fsReadMs,
+        patchMatchMs: 0,
+        matchAttempts: 0,
+      },
+    };
   }
 
   if (filePath.endsWith(".ipynb")) {
-    return editFailure(
+    return invalid(
       EditErrorCode.NOTEBOOK_FILE,
       "File is a Jupyter Notebook. Use the NotebookEdit to edit this file.",
     );
   }
 
-  const readStateFailure = getEditableReadStateFailure(filePath, read, context.readFileState);
-  if (readStateFailure) return readStateFailure;
+  if (!options.skipReadStateCheck) {
+    const readStateFailure = getEditableReadStateFailure(filePath, read, context.readFileState);
+    if (readStateFailure) return { ok: false, failure: readStateFailure };
+  }
 
   const patchMatchStartedAt = Date.now();
   const match = findEditMatch({
@@ -208,13 +274,13 @@ const editHandler: ToolHandler = async (input, context) => {
   });
   const patchMatchMs = elapsedMsSince(patchMatchStartedAt);
   if (match.status === "not_found") {
-    return editFailure(
+    return invalid(
       EditErrorCode.OLD_STRING_NOT_FOUND,
       `String to replace not found in file.\nString: ${old_string}`,
     );
   }
   if (match.status === "ambiguous") {
-    return editFailure(
+    return invalid(
       EditErrorCode.AMBIGUOUS_REPLACE,
       createAmbiguousEditMessage(match.candidateCount, old_string),
     );
@@ -223,7 +289,7 @@ const editHandler: ToolHandler = async (input, context) => {
   const actualOldString = match.actualString;
   const matchCount = countOccurrences(content, actualOldString);
   if (!replace_all && matchCount > 1) {
-    return editFailure(
+    return invalid(
       EditErrorCode.AMBIGUOUS_REPLACE,
       createAmbiguousEditMessage(matchCount, old_string),
     );
@@ -233,22 +299,31 @@ const editHandler: ToolHandler = async (input, context) => {
   const actualNewString = preserveQuoteStyle(oldString, actualOldString, normalizedNewString);
   const newContent = applyEditToContent(content, actualOldString, actualNewString, replace_all);
 
-  return writeEditResult({
-    context,
-    filePath,
-    inputFilePath: file_path,
-    originalFile: content,
-    actualOldString,
-    actualNewString,
-    newContent,
-    read,
-    replaceAll: replace_all,
-    matchStrategy: match.strategy,
-    matchCandidateCount: match.candidateCount,
-    fsReadMs,
-    patchMatchMs,
-    matchAttempts: 1,
-  });
+  return {
+    ok: true,
+    patch: {
+      context,
+      filePath,
+      inputFilePath: file_path,
+      originalFile: content,
+      actualOldString,
+      actualNewString,
+      newContent,
+      read,
+      replaceAll: replace_all,
+      matchStrategy: match.strategy,
+      matchCandidateCount: match.candidateCount,
+      fsReadMs,
+      patchMatchMs,
+      matchAttempts: 1,
+    },
+  };
+}
+
+const editHandler: ToolHandler = async (input, context) => {
+  const validation = await validateEditPatch(input, context);
+  if (!validation.ok) return validation.failure;
+  return writeEditResult(validation.patch);
 };
 
 export const editToolEntry: ToolEntry = {
@@ -467,22 +542,9 @@ function hasReadStateChanged(
   );
 }
 
-async function writeEditResult(input: {
-  context: ToolExecutionContext;
-  filePath: string;
-  inputFilePath: string;
-  originalFile: string;
-  actualOldString: string;
-  actualNewString: string;
-  newContent: string;
-  read?: FileSystemReadTextResult;
-  replaceAll: boolean;
-  fsReadMs: number;
-  patchMatchMs: number;
-  matchAttempts: number;
-  matchStrategy?: string;
-  matchCandidateCount?: number;
-}): Promise<EditOutput> {
+export async function writeEditResult(
+  input: ValidatedEditPatch,
+): Promise<EditOutput> {
   const fileSystemPort = input.context.fileSystemPort;
   if (!fileSystemPort) {
     throw createCoreError(

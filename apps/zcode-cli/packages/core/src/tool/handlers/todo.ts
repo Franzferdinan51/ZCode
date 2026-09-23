@@ -75,7 +75,7 @@ export const todoReadToolEntry: ToolEntry = {
   capability: "Read the current session todo list without modifying external state",
   metadata: {
     name: "TodoRead",
-    description: "Read the current session todo list",
+    description: "Read the current session todo list. Cheap progress check — use it before rewriting the list with TodoWrite.",
     readOnly: true,
     destructive: false,
     concurrentSafe: true,
@@ -132,11 +132,11 @@ export const todoWriteToolEntry: ToolEntry = {
     "Replace the current session todo list to track multi-step task progress and resume state",
   metadata: {
     name: "TodoWrite",
-    description: `Create and update a task list for the current session. The list is rendered to the user as your working plan.
+    description: `Track multi-step task progress with a session todo list, rendered to the user as your working plan.
 
 - Each todo has \`content\`, \`status\` ("pending" | "in_progress" | "completed"), and \`priority\` ("high" | "medium" | "low").
-- Send the full list each call; it replaces the previous one.
-- Keep one item \`in_progress\` at a time and mark it \`completed\` when done.`,
+- Send the FULL list each call — it replaces the previous one. To check the list without replacing it, use TodoRead.
+- Keep one item \`in_progress\` at a time; mark it \`completed\` when done. Skip todos for trivial single-step work.`,
     readOnly: true,
     destructive: false,
     concurrentSafe: false,

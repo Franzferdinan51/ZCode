@@ -22,12 +22,12 @@ import type { ToolEntry, ToolHandler } from "../types.js";
 
 const MAX_GREP_MODEL_BYTES = 20_000;
 const DEFAULT_GREP_TIMEOUT_MS = 30_000;
-const GREP_TOOL_DESCRIPTION = `Content search built on ripgrep. Prefer this over \`grep\`/\`rg\` via Bash — results integrate with the permission UI and file links.
+const GREP_TOOL_DESCRIPTION = `Search file CONTENTS with ripgrep. For file NAMES or locations use Glob instead.
 
-- Full regex syntax (e.g. "log.*Error", "function\\s+\\w+"). Ripgrep, not grep — escape literal braces (\`interface\\{\\}\`).
+- Full regex syntax (e.g. "log.*Error", "function\\s+\\w+"). This is ripgrep, not grep — escape literal braces (\`interface\\{\\}\`).
 - Filter with \`glob\` (e.g. "**/*.tsx") or \`type\` (e.g. "js", "py", "rust").
-- \`output_mode\`: "content" (matching lines), "files_with_matches" (paths only, default), or "count".
-- \`multiline: true\` for patterns that span lines.`;
+- \`output_mode\`: "content" (matching lines), "files_with_matches" (paths only, default), or "count". \`multiline: true\` for patterns spanning lines.
+- Prefer this over \`grep\`/\`rg\` via Bash — results integrate with the permission UI and file links.`;
 
 const grepHandler: ToolHandler = async (input, context) => {
   const parsed = GrepInputSchema.parse(input) as GrepInput;

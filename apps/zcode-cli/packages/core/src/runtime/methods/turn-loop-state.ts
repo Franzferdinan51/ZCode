@@ -15,6 +15,9 @@ import type { SubagentRunOptions } from "@zcode/contracts";
 import type { DrainedPendingInputDiagnostics } from "../types.js";
 import type { TurnMachineImpl } from "../deps.js";
 import type { RuntimeMessageEntry } from "../../agent/message-history.js";
+import type { ToolShortlist } from "../../speedstack/tool-packs.js";
+import type { EffortBehaviorPolicy, EffortTier } from "../../speedstack/effort-tiers.js";
+import type { TurnBudgets } from "../../speedstack/turn-budgets.js";
 
 export type PendingStreamRecoveryRequest = ModelStreamRecoveryStatus;
 
@@ -58,6 +61,11 @@ export interface AutoCompactLoopContext {
   rapidRefill: RapidRefillDecision;
   model: Model;
   turnRequestState: TurnRequestState;
+  /**
+   * Z2: effort-policy compaction aggressiveness multiplier (1.0 = default;
+   * <1 compacts earlier). Drives thresholdPercentOverride in compact/policy.ts.
+   */
+  compactionAggressiveness?: number | undefined;
 }
 
 export interface ReactiveCompactLoopContext {
@@ -117,6 +125,76 @@ export interface RegularTurnLoopState {
   turnRequestState: TurnRequestState;
   /** 当前 turn 不向 provider 暴露的工具名；registry 仍保留，供执行边界做纵深校验。 */
   toolDisallowlist?: readonly string[];
+  /**
+   * Z1 tool-pack shortlist used for the current model step's request.
+   * Set when label-driven pruning is active; undefined for full-schema steps.
+   */
+  speedStackToolPack?: ToolShortlist | undefined;
+  /**
+   * Z2: resolved effort behavior policy for this turn ("effort means
+   * behavior"). Undefined when nothing resolved or enforcement is disabled:
+   * fail-open, today's behavior.
+   */
+  speedStackBehaviorPolicy?: EffortBehaviorPolicy | undefined;
+  /** Z2: effective per-turn budgets for this turn ({} = unbounded). */
+  speedStackBudgets?: TurnBudgets | undefined;
+  /** Z2: effort tier label for budget messaging (thinking "off" -> "low"). */
+  speedStackBudgetTier?: EffortTier | undefined;
+  /**
+   * Z2: per-turn 80%-of-calls threshold that arms the (disabled-by-default)
+   * anomaly-channel budget detector in turn-tool-warnings.ts.
+   */
+  speedStackBudgetWarningThreshold?: number | undefined;
+  /** Z2: soft-then-hard stage flags: one warn + one escalation per turn. */
+  speedStackBudgetWarned?: boolean | undefined;
+  speedStackBudgetEscalated?: boolean | undefined;
+  /** Z3: plan-then-execute planner phase: read-only tools + small budget. */
+  speedStackPlannerPhase?: boolean | undefined;
+  /**
+   * Z3: planner pass hit its small budget — the executor phase must fail
+   * open to a direct turn instead of inventing a plan.
+   */
+  speedStackPlannerBudgetExhausted?: boolean | undefined;
+  /** Z2: ultra-tier verification reminder already injected this turn. */
+  speedStackVerificationReminderSent?: boolean | undefined;
+  /** Rank 10: one-shot subagent spawning guidance reminder injected this turn. */
+  speedStackSubagentGuidanceReminded?: boolean | undefined;
+  /**
+   * Rank 10: cached escape-hatch check — whether the turn's user message
+   * explicitly asks to use a subagent (explicit request wins over the
+   * effort-tier spawning policy). Computed once per turn, fail-open.
+   */
+  speedStackExplicitSubagentRequest?: boolean | undefined;
+  /** Names of tools whose schemas were sent in the current step's request. */
+  speedStackSentToolNames?: readonly string[] | undefined;
+  /**
+   * Set when a tool-pack miss triggered fail-open recovery: the rest of this
+   * turn sends the full tool set.
+   */
+  speedStackFullToolRetry?: boolean | undefined;
+  /** Rank 8: doom-loop normalized fingerprint of the current similar-call streak. */
+  doomLoopFingerprint?: string | undefined;
+  /** Rank 8: normalized target (path/command/pattern) of the current streak. */
+  doomLoopTarget?: string | undefined;
+  /** Rank 8: length of the current similar-call streak. */
+  doomLoopStreak: number;
+  /** Rank 8: highest doom-loop escalation stage reached this turn (0-3). */
+  doomLoopStage: number;
+  /** Rank 8: tool names already used this turn (strategy-change suggestions). */
+  doomLoopUsedTools: string[];
+  /**
+   * Rank 8: a doom-loop strategy-change nudge was sent — suppresses the
+   * generic 80% budget warning (the model already got a stronger nudge).
+   * Never sets speedStackBudgetEscalated; budget cap semantics are untouched.
+   */
+  doomLoopStrategyNudged?: boolean | undefined;
+  /** Rank 8: interactive final stage requested a pause; loop top completes the turn. */
+  doomLoopPauseRequested?: boolean | undefined;
+  /** Rank 8: tool name + streak captured for the pause message. */
+  doomLoopPauseToolName?: string | undefined;
+  doomLoopPauseStreak?: number | undefined;
+  /** Rank 8: unattended final redirect sent (one-shot per turn). */
+  doomLoopFinalRedirectSent?: boolean | undefined;
   traceId: TraceId;
   turnAbortSignal: AbortSignal;
   turnId: TurnId;

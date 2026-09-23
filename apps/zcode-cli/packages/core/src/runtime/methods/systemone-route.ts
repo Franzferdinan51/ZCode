@@ -29,6 +29,7 @@ export async function ensureSystemOneRouteDecision(
     },
   );
   this.systemOneRouteValue = decision;
+  this.systemOneRouteTaskText = task;
   if (decision) {
     this.logger?.debug("SystemOne route decision fetched", {
       confidence: decision.confidence,

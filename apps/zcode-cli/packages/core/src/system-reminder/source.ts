@@ -25,6 +25,8 @@ export const SYSTEM_REMINDER_PERSISTED_SOURCES = [
   "tool_result_warning",
   "resume_referenced_session_context",
   "plan_file_reference",
+  "plan_execute_planner",
+  "plan_execute_executor",
   "resume_goal_state",
   "goal_state_change",
   "plugin_reference",
@@ -38,6 +40,7 @@ export const SYSTEM_REMINDER_PERSISTED_SOURCES = [
 ] as const;
 
 export const SYSTEM_REMINDER_PER_REQUEST_SOURCES = [
+  "subagent_guidance",
   "incoming_message",
   "hook_context",
   "runtime_mode",
@@ -104,6 +107,9 @@ const SYSTEM_REMINDER_DESCRIPTORS: Record<SystemReminderSource, DescriptorShape>
   // model-only synthetic notice 固化，后续只追加、不改写；冷恢复按原文重建以保持缓存前缀。
   plugin_reference: descriptor("current_turn", "per_current_turn", true, "sr.plugin_reference"),
   todo_reminder: descriptor("current_turn", "per_current_turn", true, "sr.todo_reminder"),
+  // Rank 10: one-shot effort-aware subagent spawning guidance. Per-turn,
+  // provider-visible like the other policy reminders; never persisted.
+  subagent_guidance: descriptor("current_turn", "per_current_turn", true, "sr.subagent_guidance"),
   task_status: descriptor("mid_turn_event", "mid_turn_event", true, "sr.task_status"),
   // 只用于 Read 等 tool result 内容内联 warning，不作为 synthetic user notice 持久化。
   tool_result_warning: descriptor("tool_result", "tool_result", true, "sr.tool_result_warning"),
@@ -118,6 +124,18 @@ const SYSTEM_REMINDER_DESCRIPTORS: Record<SystemReminderSource, DescriptorShape>
     "resume_history",
     true,
     "sr.plan_file_reference",
+  ),
+  plan_execute_planner: descriptor(
+    "current_turn",
+    "per_current_turn",
+    true,
+    "sr.plan_execute_planner",
+  ),
+  plan_execute_executor: descriptor(
+    "current_turn",
+    "per_current_turn",
+    true,
+    "sr.plan_execute_executor",
   ),
   resume_goal_state: descriptor(
     "history_continuity",

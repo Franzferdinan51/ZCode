@@ -1,0 +1,88 @@
+{
+  "recordedAt": "2026-09-23T21:25:14.661Z",
+  "shimEndpoint": "http://127.0.0.1:8765/v1/systemone/route",
+  "tasks": {
+    "rename-file": {
+      "tier": "balanced",
+      "confidence": 0.68,
+      "taskLabels": [
+        "files"
+      ],
+      "effort": "medium",
+      "modelId": "ornith-1.5-9b",
+      "tierScores": {
+        "economy": 0.18236276550970124,
+        "balanced": 0.5398627655097012,
+        "heavy": 0.2777744689805976
+      }
+    },
+    "find-todos": {
+      "tier": "balanced",
+      "confidence": 0.68,
+      "taskLabels": [
+        "search"
+      ],
+      "effort": "medium",
+      "modelId": "ornith-1.5-9b",
+      "tierScores": {
+        "economy": 0.1832529927294227,
+        "balanced": 0.5407529927294227,
+        "heavy": 0.27599401454115474
+      }
+    },
+    "web-news": {
+      "tier": "balanced",
+      "confidence": 0.68,
+      "taskLabels": [
+        "search"
+      ],
+      "effort": "medium",
+      "modelId": "ornith-1.5-9b",
+      "tierScores": {
+        "economy": 0.1854264003469142,
+        "balanced": 0.5429264003469142,
+        "heavy": 0.27164719930617165
+      }
+    },
+    "summarize-doc": {
+      "tier": "economy",
+      "confidence": 0.8,
+      "taskLabels": [
+        "summarize"
+      ],
+      "effort": "low",
+      "modelId": "minicpm5-2b",
+      "tierScores": {
+        "economy": 0.5424933893890493,
+        "balanced": 0.18499338938904936,
+        "heavy": 0.27251322122190136
+      }
+    },
+    "debug-crash": {
+      "tier": "heavy",
+      "confidence": 0.67,
+      "taskLabels": [
+        "code",
+        "ops"
+      ],
+      "effort": "high",
+      "modelId": "ornith-1.5-35b-a3b",
+      "tierScores": {
+        "economy": 0.18386373104415954,
+        "balanced": 0.18386373104415954,
+        "heavy": 0.6322725379116809
+      }
+    },
+    "morning-reminder": {
+      "tier": "balanced",
+      "confidence": 0.68,
+      "effort": "medium",
+      "modelId": "ornith-1.5-9b",
+      "tierScores": {
+        "economy": 0.18354243387860197,
+        "balanced": 0.541042433878602,
+        "heavy": 0.27541513224279607
+      }
+    }
+  }
+}

@@ -23,15 +23,11 @@ const OFF_PEAK_SEND_MESSAGE_HINT =
   "Spawn a new foreground Agent with the full context instead of resuming a completed one.";
 
 const SEND_MESSAGE_PROVIDER_DESCRIPTION = [
-  "# SendMessage",
+  "Send a message to another agent (a subagent you spawned, or a peer).",
   "",
-  "Send a message to another agent.",
-  "",
-  "```json",
-  '{"to": "agent_<uuid>", "summary": "assign task 1", "message": "start on task #1"}',
-  "```",
-  "",
-  "Your plain text output is NOT visible to other agents — to communicate, you MUST call this tool. Messages from agents are delivered automatically; you don't check an inbox. Refer to local agents by the `agentId` returned in the Agent spawn result. To resume a completed agent, use its `agentId`; it resumes in the background and you'll be notified when it finishes.",
+  "- Your plain text output is NOT visible to other agents \u2014 to communicate, you MUST call this tool.",
+  "- Address local agents by the `agentId` from the Agent spawn result. Messages from agents are delivered automatically; there is no inbox to check.",
+  "- To resume a completed agent, message its `agentId`; it resumes in the background and you are notified when it finishes.",
 ].join("\n");
 
 const SEND_MESSAGE_TOOL_OUTPUT_SCHEMA = {

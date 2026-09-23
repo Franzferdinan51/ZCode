@@ -263,7 +263,12 @@ export class PermissionService {
 
   private matchesRuleToolName(ruleToolName: string, contextToolName: string): boolean {
     if (ruleToolName === contextToolName) return true;
-    return contextToolName === "Write" && ruleToolName === "Edit";
+    if (contextToolName === "Write" && ruleToolName === "Edit") return true;
+    // Rank 7: ApplyPatchSet is the same operation class as Edit
+    // (exact-string file modification). Existing Edit allow/deny rules apply
+    // to it, so a user who locked down Edit does not silently get a bypass
+    // through the workflow tool.
+    return contextToolName === "ApplyPatchSet" && ruleToolName === "Edit";
   }
 
   private matchesRuleScope(
@@ -287,6 +292,20 @@ export class PermissionService {
     const record = input as Record<string, unknown>;
     if (toolName === "WebFetch" && typeof record.url === "string") {
       return webFetchRuleSubjects(record.url);
+    }
+
+    // Rank 7: ApplyPatchSet carries its target paths inside the patches
+    // array. Expose every target so path-scoped project rules apply
+    // per file instead of seeing an empty subject list.
+    if (toolName === "ApplyPatchSet" && Array.isArray(record.patches)) {
+      const subjects: string[] = [];
+      for (const patch of record.patches) {
+        if (patch && typeof patch === "object") {
+          const filePath = (patch as Record<string, unknown>).file_path;
+          if (typeof filePath === "string" && filePath.length > 0) subjects.push(filePath);
+        }
+      }
+      if (subjects.length > 0) return subjects;
     }
 
     for (const key of ["command", "url", "file_path", "path", "pattern", "patch_text"]) {

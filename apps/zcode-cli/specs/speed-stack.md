@@ -132,6 +132,57 @@ never change default behavior.
 - TUI `AVAILABLE_COMMANDS` picks the new entries up automatically from the
   help list.
 
+### 8. Label-driven per-task tool packs (Z1, 3.25.0 Package 1)
+
+- Motivation: every model step re-sends ALL tool schemas (~33.5K tokens for
+  40 built-in tools, measured 2026-09-23). The route's `taskLabels` were
+  parsed but unused -- this turns them into a per-task shortlist.
+- `core/src/speedstack/tool-packs.ts` (pure, no runtime imports):
+  `TOOL_PACK_LABEL_TABLE` (label -> keepTools/keepServers, declarative),
+  always-on core (Read/Write/Edit/Bash/Glob/Grep/TodoRead/TodoWrite) +
+  actor-protocol tools (never pruned), `computeToolShortlist` /
+  `computeServerShortlist`, schema-token estimation (`chars/4`), miss
+  detection + recovery reminder builder.
+- Suppression happens BEFORE request construction in
+  `runtime/methods/turn-loop.ts` (`computeTurnToolPackShortlist`); the win
+  is not sending the schemas. Miss recovery in
+  `runtime/methods/turn-model-step.ts`: withheld call -> full-set retry next
+  step + on-demand MCP server start
+  (`ensureToolPackPrunedMcpServersStarted`).
+- Fail-open: kill switches (`ZCODE_SPEEDSTACK_PRUNE=0`,
+  `mcpPruning=false`), missing route, confidence < 0.6, or any error ->
+  full tool list. Schema pruning threshold 0.6 (below the 0.8 whole-MCP
+  skip: schema recovery is cheap, server startup is not).
+- Route signal preservation (Ryan design note): the shim's `probabilities`
+  are parsed into `SystemOneRouteDecision.tierScores`, `routeTierMargin()`
+  exposes the top-1/top-2 gap, and both ride `McpToolLevelPolicy`,
+  `ToolPackRouteView`, `ToolShortlist`, and the telemetry logs end-to-end.
+  No policy gates on them yet -- the future scored-classification/ranking
+  work consumes them without rework.
+
+### 9. Config-driven turn budgets + eval harness (3.25.0 Package 1)
+
+- Per-route-tier turn/tool budgets are CONFIG-DRIVEN, never hard-coded
+  (Ryan tuning directive): `core/src/speedstack/turn-budgets.ts`
+  (`resolveTurnBudgets`, `checkBudgetHit`, `describeTurnBudgets`).
+- Env (positive ints; unset/garbage = unbounded = today's behavior):
+  `ZCODE_BUDGET_{ECONOMY,BALANCED,HEAVY}_{MAX_STEPS,MAX_TOOL_CALLS}`,
+  plus `ZCODE_BUDGET_DEFAULT_{MAX_STEPS,MAX_TOOL_CALLS}` fallback.
+- No enforcement yet -- the turn loop is unbounded today; the next package
+  adds enforcement and raises the caps (current posture: too tight for real
+  reasoning work is the thing being tuned, not asserted here).
+- Eval harness: `core/src/speedstack/eval/` (`run.ts` CLI via tsx).
+  Modes: `policy` (route + tool-pack + budget measurement over the 6-task
+  battery, live shim or `--offline` fixtures), `smoke` (shim + LM Studio
+  answer, no inference/model changes), `replay` (re-score a report's usage
+  against new caps). Per-run budget override: `--budget <tier>:<steps>:<calls>`
+  (repeatable, `-` = unbounded). Simulated usage: `--simulate usage.json`.
+  The tune loop: `policy --simulate ... --budget ...` to find hits, then
+  `replay --run report.json --budget ...` to validate raised caps.
+  Reports record per task: route signals (tier/confidence/labels/
+  tierScores/margin), schema tokens before/after, effective budgets,
+  usage, and budget-hit verdicts. Full docs: `eval/README.md`.
+
 ## Acceptance
 
 - `node --test` on `core/src/speedstack/*.test.ts`: all pass (pure logic;
@@ -183,3 +234,178 @@ never change default behavior.
   support beyond this change; noted in research only.
 - UI (desktop/web) surfaces for the new commands: CLI-first; the shared help
   entries make them available to other clients later.
+
+## Package 2 — "effort means behavior" (3.25.0)
+
+### What it is
+
+Package 2 turns the effort tier into a full per-turn **behavior policy**,
+resolved once per turn alongside the existing effort override
+(`resolveSystemOneBehaviorPolicy` in `speedstack/systemone-route.ts`, called
+from `createTurnModel`). Every dimension has table defaults and is
+independently overridable; misconfiguration fails open to the defaults.
+
+### Policy table (`speedstack/effort-tiers.ts`)
+
+`getEffortBehaviorPolicy(tier, env)` — raised step/call defaults
+(low 25/60, medium 40/100, high 60/150, xhigh 90/250, ultra 120/400),
+subagent allowance (`never` low/off, `conservative` medium/high,
+`parallel` xhigh/ultra), tier-scaled child `maxTurns` (2/4/6/8/12),
+read-breadth advisory caps (3/6/10/15/25), verification passes (1 for
+xhigh/ultra), compaction aggressiveness (0.9 xhigh, 0.85 ultra), and the
+plan-execute eligibility gate (`isPlanThenExecuteEligible`: policy flag OR
+heavy route tier — consumed by the Rank-3 wiring, defined here).
+
+Env overrides per dimension: `ZCODE_EFFORT_<TIER>_SUBAGENTS`,
+`_SUBAGENT_MAX_TURNS`, `_READ_BREADTH`, `_VERIFICATION_PASSES`,
+`_COMPACTION`, `_PLAN_EXECUTE` (`<TIER>` = LOW/MEDIUM/HIGH/XHIGH/ULTRA).
+
+`resolveEffectiveTurnBudgets({routeTier, effortTier, env})` merges the table
+defaults with the Package-1 `ZCODE_BUDGET_*` surface (env wins wherever
+set); no effort resolved = Package-1 env-only behavior.
+
+### Soft-then-hard enforcement (`speedstack/budget-enforcement.ts`)
+
+Pure `evaluateBudgetEnforcement(usage, budgets, stage)`:
+`ok` → `warn` (80% of either cap, once per turn, injected through the
+existing `ModelAnomalyWarning` channel) → `escalate` (100%: one
+strategy-change nudge, exactly one more model step) → `stop` (hard stop as
+the turn's final assistant text, session already persisted by the normal
+turn-completion path, explicit resume wording: send another message such as
+"continue"). The turn loop evaluates it at the top of every iteration
+(`enforceTurnBudgets` in `runtime/methods/turn-loop.ts`); the per-turn
+80%-of-calls threshold also arms the disabled-by-default anomaly-channel
+budget detector (`handleToolCallAnomalyWarnings`), sharing one warn flag so
+a turn warns once. Kill switch: `ZCODE_BUDGET_ENFORCE=0`.
+
+### Other runtime wiring
+
+- Subagent gating: low/off hides `Agent`/`Task` from the model via the turn
+  disallowlist (`buildTurnDisallowedTools`); child `maxTurns` is tier-scaled
+  (`subagent.ts`), explicit request/config values still win.
+- Ultra verification: one review reminder after `Edit`/`Write`/`ApplyPatch`
+  per turn (`handleVerificationPassReminder`, via the anomaly channel).
+- Compaction aggressiveness: `thresholdPercentOverride` in
+  `compact/policy.ts` is now functional (was accepted-but-ignored), driven
+  per turn from the policy.
+
+### Verification (2026-09-23)
+
+- `tsx --test src/speedstack/*.test.ts`: **133/133** (105 Package-1 +
+  28 Package-2: policy defaults, every env-override dimension, off→low,
+  env-wins merging, warn→escalate→stop transitions, message bodies,
+  kill switches).
+- `pnpm typecheck` (core package): clean.
+- Budget tune loop (deterministic fixtures
+  `speedstack/eval/usage-baseline.json`, `usage-runaway.json`, reports in
+  `~/workspace/zcode/budget-tuning/`):
+  - tight baseline `--budget balanced:20:40`: **1/6** cap hits (web-news)
+  - raised policy defaults (no flags): **0/6**
+  - runaway demo (debug-crash 200 steps/500 calls): **1/6** — the raised
+    high-tier caps (60/150) still bound genuine runaways
+  - `replay` of the tight report against raised defaults: **0/6**
+- Pre-existing `oxlint` findings on touched files are unchanged at HEAD
+  (verified via `git stash`); no new lint issues introduced.
+
+### Deliberately not done
+
+- Hard enforcement of `readBreadth`: resolved, reported per task, and
+  advisory; hard caps land with the Rank 7/8 workflow/doom-loop work.
+- Plan-execute wiring: eligibility is defined and reported; the Rank-3
+  wiring consumes it.
+- A live end-to-end turn-loop exercise of the stop path: covered by the
+  pure state-machine tests + the established `turnMachine.complete` path
+  (mirrors the automation-limit stop).
+
+## SystemOne decision surface (3.25.0, shipped)
+
+SystemOne is no longer just a model router. The 3.25.0 agent-flow release
+turns the per-task route decision into the full agent behavior plan: the
+router's tier/effort/labels drive how the turn runs, not just which
+reasoning level the model gets. All of it is advisory and fail-open — a
+broken or absent shim changes nothing about what the agent can do, only
+about how efficiently it does it.
+
+### What SystemOne decides
+
+| Decision                          | Source                                   | Where it lands                                                                |
+|-----------------------------------|------------------------------------------|-------------------------------------------------------------------------------|
+| Effort tier + behavior policy     | Route `effort` (low/balanced/high/ultra) | `EffortBehaviorPolicy` (`speedstack/effort-tiers.ts`): max model steps, max tool calls, subagent allowance (low: never, ultra: parallel), tier-scaled subagent `maxTurns`, read/search breadth cap, verification passes after edits (xhigh/ultra: 1), compaction aggressiveness multiplier, plan-then-execute eligibility |
+| Per-task tool packs (JIT)         | Route `taskLabels` + task text           | `runtime/methods/tool-packs.ts`: core tools always on; MCP servers/tools ranked by label→capability mapping, irrelevant ones suppressed before request construction (`speedstack/tool-packs.ts`) |
+| MCP attach policy                 | Route tier + confidence                  | `resolveMcpAttachPolicy` (`speedstack/systemone-route.ts`): economy ≥0.8 skips all MCP; otherwise label-ranked subset; low confidence keeps everything |
+| Turn/tool budgets                 | Effort policy + `ZCODE_BUDGET_*` overrides | Soft warning at 80% via the anomaly-warning channel, one auto-escalation, then hard stop with resumable session state (`speedstack/budget-enforcement.ts`, enforced in `runtime/methods/turn-loop.ts`) |
+| Plan-then-execute vs direct       | Route tier, labels, multi-file signals  | `plan-execute-gate.ts`: heavy/xhigh+ with multi-file or ambiguous/risky signals → planner pass writes `PLAN.md` (read-only tools) → executor implements it; simple tasks never pay the planning tax |
+| Verification depth                | Effort policy                             | `verificationPasses` (0/1): a review pass runs after edits on xhigh/ultra; `/verify` and `/review` slash commands stay available on demand |
+| Compaction behavior               | Effort policy + boundaries                | `compactionAggressiveness` multiplier on the auto-compact threshold; anchored compaction archives the full transcript to disk, extracts anchors (decisions, file paths, errors, TODOs) verbatim, and injects them into the summarizer prompt so naive summarization can't drop them (`speedstack/anchored-compaction.ts`) |
+| Doom-loop escalation              | Normalized call fingerprints              | `doom-loop.ts`: warning → strategy-change nudge naming untried tools → pause/auto-compact + retry; batch patterns (consecutive calls on different files) are exempt |
+| Workflow tools                    | Telemetry of hot chains                   | `search_and_read`, `apply_patch_set` (grep→read→edit, glob→read in one round trip; additive, primitives stay available) |
+| Subagent policy                   | Effort policy + subagent guidance         | In-loop parallel tool calls preferred; subagents reserved for broad independent investigations; low effort never spawns (`subagent-guidance.ts`) |
+
+### The fail-open contract
+
+Everything above degrades to "today's behavior" when SystemOne is
+unavailable or unconvinced — the agent never loses capability, only
+optimization:
+
+- Shim down, slow (> timeout), non-200, or malformed response → no route
+  decision; the turn runs exactly as it would without SystemOne
+  (`speedstack/systemone-route.ts`: never throws, fail-open).
+- Route confidence below the prune threshold → the full tool/MCP surface
+  is attached (`no route decision (fail-open)`, `confidence below prune
+  threshold (fail-open)`).
+- Tool-pack computation throws → full attach (`tool-pack computation threw
+  (fail-open)`).
+- A pruned tool turns out to be needed → one-shot fail-open recovery
+  (`recoverTurnToolPackMiss`): the turn retries with the full set, once.
+- Plan-execute gate errors → direct mode (`gate-error-fail-open`).
+- Budget hit mid-task → resumable session state; the stop message says how
+  to resume.
+- All numeric behavior values (budgets, policy dimensions) live in config /
+  env, never hard-coded, so they can be tuned without a release. Model
+  choice always flows from the router, the registry, or explicit user
+  config — no hard-coded model IDs as defaults anywhere.
+
+### Kill switches
+
+Each surface has its own switch; all default to ON (integrated). Set to
+`0` to disable that surface only — the rest of SystemOne keeps working.
+
+| Env var                  | Disables                                        |
+|--------------------------|-------------------------------------------------|
+| `ZCODE_SYSTEMONE=0`      | All SystemOne routing/integration               |
+| `ZCODE_SPEEDSTACK_PRUNE=0` | Per-task tool-pack pruning + MCP pruning      |
+| `ZCODE_BUDGET_ENFORCE=0` | Turn/tool-call budget enforcement              |
+| `ZCODE_PLAN_EXECUTE=0`   | Route-driven plan-then-execute gating           |
+| `ZCODE_ANCHORED_COMPACT=0` | Anchored compaction (falls back to plain compact) |
+| `ZCODE_DOOMLOOP=0`       | Doom-loop fingerprint escalation (plain warnings stay) |
+
+`mcpPruning=false` (session/runtime config) disables MCP tool pruning from
+the config side instead of the env side.
+
+Tuning (not killing): `ZCODE_BUDGET_<TIER>_MAX_STEPS` /
+`ZCODE_BUDGET_<TIER>_MAX_TOOL_CALLS` (tiers: ECONOMY/BALANCED/HEAVY/ULTRA,
+plus `ZCODE_BUDGET_DEFAULT_*`), and `ZCODE_EFFORT_<TIER>_{SUBAGENTS,
+SUBAGENT_MAX_TURNS,READ_BREADTH,VERIFICATION_PASSES,COMPACTION,PLAN_EXECUTE}`
+adjust the effort-behavior table without a release.
+
+### Independent controls (what SystemOne does NOT touch)
+
+- **Model selection is independent.** The model comes from the pinned LM
+  Studio model, the model picker, or explicit user config. SystemOne never
+  loads, unloads, or switches models; its tier→model mapping is advisory
+  and with one loaded model both planner and executor resolve to it.
+- **Thinking level is independent.** `--thinking` / the thinking selector
+  sets reasoning depth directly; the route's effort→reasoningLevel mapping
+  only applies as an override when the user hasn't set one, and explicit
+  user flags always win.
+- No cloud model names appear as defaults anywhere in the speed-stack.
+
+### Verification (2026-09-23)
+
+- `tsx --test src/speedstack/*.test.ts`: **237/237** (21 suites).
+- `tsc --noEmit` on `@zcode/core` and `@zcode/contracts`: clean.
+- Budget tune loop against the eval harness (`speedstack/eval/`):
+  raised policy defaults give 0/6 cap hits on the baseline battery while
+  still bounding a 200-step/500-call runaway (1/6) — per Ryan's directive,
+  budgets are comfortably above too-tight demo values.
+- `git status` clean of deletions before ship; no local-only commits.

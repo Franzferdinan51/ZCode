@@ -14,6 +14,7 @@
  * `fetchSystemOneRouteDecision` against a guaranteed-dead port below.
  */
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import { test } from "node:test";
 
 import {
@@ -23,6 +24,7 @@ import {
   resolveEffortTierAndOptions,
   resolveMcpAttachPolicy,
   resolveSystemOneModelTarget,
+  routeTierMargin,
   SYSTEMONE_PRUNE_CONFIDENCE_THRESHOLD,
   type EffortResolution,
   type SystemOneRouteDecision,
@@ -418,4 +420,82 @@ test("ZCODE_SYSTEMONE unset keeps route lookups live", async () => {
     timeoutMs: 500,
   });
   assert.equal(decision, undefined);
+});
+
+test("fetch preserves the shim's per-tier probabilities as tierScores", async () => {
+  const payload = {
+    route: {
+      tier: "balanced",
+      confidence: 0.68,
+      effort: "medium",
+      task_labels: ["files"],
+      probabilities: { economy: 0.18, balanced: 0.54, heavy: 0.28 },
+    },
+  };
+  const server = createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(payload));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    const decision = await fetchSystemOneRouteDecision("rename a file", {
+      endpoint: `http://127.0.0.1:${address.port}/v1/systemone/route`,
+      timeoutMs: 2000,
+    });
+    assert.ok(decision, "expected a parsed decision");
+    assert.deepEqual(decision.tierScores, { economy: 0.18, balanced: 0.54, heavy: 0.28 });
+    assert.deepEqual(decision.taskLabels, ["files"]);
+  } finally {
+    server.close();
+  }
+});
+
+test("fetch drops malformed probabilities but keeps the decision", async () => {
+  const payload = { route: { tier: "economy", confidence: 0.9, probabilities: "nonsense" } };
+  const server = createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(payload));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    const decision = await fetchSystemOneRouteDecision("x", {
+      endpoint: `http://127.0.0.1:${address.port}/v1/systemone/route`,
+      timeoutMs: 2000,
+    });
+    assert.ok(decision);
+    assert.equal(decision.tierScores, undefined);
+  } finally {
+    server.close();
+  }
+});
+
+test("routeTierMargin returns the top-1 vs top-2 gap", () => {
+  assert.equal(
+    routeTierMargin({ tier: "balanced", confidence: 0.68, tierScores: { economy: 0.18, balanced: 0.54, heavy: 0.28 } }),
+    0.54 - 0.28,
+  );
+  assert.equal(routeTierMargin({ tier: "balanced", confidence: 0.68 }), undefined);
+  assert.equal(routeTierMargin(undefined), undefined);
+  assert.equal(
+    routeTierMargin({ tier: "balanced", confidence: 0.68, tierScores: { balanced: 1 } }),
+    undefined,
+  );
+});
+
+test("attach policy preserves tierScores/margin on the tool-level policy", () => {
+  const policy = resolveMcpAttachPolicy(
+    {
+      tier: "balanced",
+      confidence: 0.9,
+      tierScores: { economy: 0.1, balanced: 0.7, heavy: 0.2 },
+    },
+    undefined,
+    { serverNames: ["filesystem", "memory"] },
+  );
+  assert.deepEqual(policy.toolPolicy.tierScores, { economy: 0.1, balanced: 0.7, heavy: 0.2 });
+  assert.equal(policy.toolPolicy.margin, 0.7 - 0.2);
 });
