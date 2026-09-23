@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.20.0 (2026-09-22)
+
+### Features
+
+* provider-grouped model picker, memory settings UI, optional duckbot-rag-memory ([86a97bc](https://github.com/Franzferdinan51/ZCode/commit/86a97bca287aabe7796826ac6b8b912cc6dd7ed6))
+  * /model picker grouped by provider with current-model marker, context-window and reasoning badges, descriptions and disabled reasons
+  * Memory settings UI with optional duckbot-rag-memory toggle (embedding mode, custom paths)
+  * ragMemory plumbing through startup preferences, protocol records, inherited sessions, and host runtime
+
 ## 3.19.0 (2026-09-22)
 
 ### Features
