@@ -37,6 +37,7 @@ import type {
 import type { BackgroundResultOriginMeta, ContextUsageBreakdownItem } from "@zcode/contracts";
 import type { RuntimeCommand, RuntimeCommandId } from "./command-queue.js";
 import type { RuntimeMessageEntry } from "../agent/message-history.js";
+import type { SystemOneRouteDecision } from "../speedstack/systemone-route.js";
 import type {
   ActiveTurnInfo,
   AcquireForegroundPromotionLeaseResult,
@@ -271,6 +272,7 @@ export interface AgentRuntimeCoreMethods {
   ): Promise<void>;
   startMcpStartup(traceContext: TraceContext): Promise<McpConnectionSnapshot> | undefined;
   initializeMcp(traceContext: TraceContext): Promise<void>;
+  ensureSystemOneRouteDecision(task: string): Promise<SystemOneRouteDecision | undefined>;
   discoverSkillsForContext(traceContext: TraceContext): Promise<SkillLoadOutcome | undefined>;
   createConfigOnlyContextSnapshot(workingDirectory: string): ContextSourceSnapshot;
   initializeMessageHistoryFromContext(

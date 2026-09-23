@@ -87,6 +87,14 @@ export interface SpeedStackSessionConfig {
   mcpServerAllowlist?: readonly string[];
   /** MCP tool allowlist ("server.tool" or "tool"); undefined/empty = all. */
   mcpToolAllowlist?: readonly string[];
+  /**
+   * MCP pruning kill-switch (config level). `false` disables route-driven
+   * MCP pruning for the session; undefined/true leaves the default policy
+   * live. The env-level kill-switch is ZCODE_SPEEDSTACK_PRUNE=0 — see
+   * resolveMcpAttachPolicy in speedstack/systemone-route.ts, which documents
+   * both.
+   */
+  mcpPruning?: boolean;
 }
 
 export function normalizeSpeedStackSessionConfig(
@@ -107,6 +115,9 @@ export function normalizeSpeedStackSessionConfig(
     config.mcpToolAllowlist = raw["mcpToolAllowlist"].filter(
       (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
     );
+  }
+  if (typeof raw["mcpPruning"] === "boolean") {
+    config.mcpPruning = raw["mcpPruning"];
   }
   return config;
 }

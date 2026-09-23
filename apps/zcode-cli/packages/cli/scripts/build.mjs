@@ -203,6 +203,12 @@ export const resolveBuildAliases = ({
     rootDirectory,
     "../../packages/shared/src/harness-drivers.ts",
   ),
+  // SpeedStack SystemOne 路由模块直连 systemone-scorer 的 effort hint；
+  // 漏声明会被通用前缀改写拼到 `src/index.ts/systemone-scorer`，Desktop agent 打包失败（同上）。
+  "@zcode/shared/systemone-scorer": resolve(
+    rootDirectory,
+    "../../packages/shared/src/systemone-scorer.ts",
+  ),
   "@zcode/shared": resolve(rootDirectory, "../../packages/shared/src/index.ts"),
   "@zcode/core": resolve(cliDirectory, "../core/dist/index.js"),
 });

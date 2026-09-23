@@ -21,6 +21,7 @@ import type {
   WorkspaceId,
 } from "@zcode/contracts";
 import type { ZCodeProviderAccountAccess } from "@zcode/shared";
+import type { SpeedStackSessionConfig } from "../speedstack/effort-tiers.js";
 import type { EffectiveModelSelectionResult } from "@zcode/shared/model-selection";
 import type { RuntimeMessageEntry } from "../agent/message-history.js";
 import type {
@@ -197,6 +198,12 @@ export interface AgentRuntimeConfig {
   memory?: MemoryRuntimeConfig;
   /** 历史恢复允许未绑定；只有完整选择才能创建本轮执行 Model。 */
   modelSelection?: ModelSelection;
+  /**
+   * Speed Stack per-session config (effort tier, MCP pruning). All fields
+   * optional; absent means current behavior unchanged. Normalized at session
+   * creation via normalizeSpeedStackSessionConfig.
+   */
+  speedStack?: SpeedStackSessionConfig;
   titleGeneration?: {
     enabled?: boolean;
     modelSelection?: ModelSelection;

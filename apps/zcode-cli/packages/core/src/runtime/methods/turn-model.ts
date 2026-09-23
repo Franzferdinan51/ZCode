@@ -11,6 +11,7 @@ import { cloneModelSelection } from "../model-selection.js";
 import { createRefreshRuntimeHeadersBeforeModelAttempt } from "./model-runtime-headers.js";
 import { createRuntimeModel, withModelInvocationContext } from "./runtime-model.js";
 import { applyRuntimeExecutionState } from "../execution-state.js";
+import { applySystemOneEffortOverride } from "../../speedstack/systemone-route.js";
 
 export function createTurnModel(
   runtime: AgentRuntimeInternal,
@@ -24,10 +25,13 @@ export function createTurnModel(
     selection,
     requestDependencies: options.requestDependencies,
   });
-  return withModelInvocationContext(model, (request) => ({
+  // Z1: route-driven effort override (reasoningLevel + maxOutputTokens).
+  // No-op until the session's route decision has settled (fail-open).
+  const routedModel = applySystemOneEffortOverride(runtime, model, runtime.logger);
+  return withModelInvocationContext(routedModel, (request) => ({
     refreshRuntimeHeadersBeforeAttempt: createRefreshRuntimeHeadersBeforeModelAttempt(runtime, {
       abortSignal: request.abortSignal,
-      model,
+      model: routedModel,
       traceContext: getCurrentModelInvocationContext()?.traceContext ?? runtime.rootTraceContext,
     }),
   }));

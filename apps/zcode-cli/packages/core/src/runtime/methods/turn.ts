@@ -185,6 +185,11 @@ export async function executeTurnCommand(
       const executionStartedAt = performance.timeOrigin + performance.now();
       beginLocalTurnPreparation(turnTraceContext, "execution")();
       throwIfTurnAborted(turnAbortSignal);
+      // Speed Stack: one SystemOne route lookup per session (cached; first
+      // task wins). The decision drives the Z1 effort override and the Z2
+      // MCP attach policy. Fail-open: shim down/unreachable -> undefined ->
+      // today's behavior exactly.
+      await this.ensureSystemOneRouteDecision(input);
       let admittedModel;
       try {
         admittedModel =

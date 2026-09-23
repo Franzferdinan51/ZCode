@@ -127,6 +127,10 @@ import { RuntimeTelemetryFacade } from "../telemetry/runtime-telemetry.js";
 import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-runtime-admission.js";
 import { disposeNodeReplSession } from "../tool/handlers/node-repl.js";
 import { cloneModelSelection } from "./model-selection.js";
+import {
+  normalizeSpeedStackSessionConfig,
+  type SpeedStackSessionConfig,
+} from "../speedstack/effort-tiers.js";
 
 // oxlint-disable typescript-eslint/no-unsafe-declaration-merging
 export class AgentRuntime {
@@ -155,6 +159,8 @@ export class AgentRuntime {
   /** 模型请求准入端口；随每次模型请求进调用上下文。 */
   private modelRequestAdmission?: AgentRuntimeDeps["modelRequestAdmission"];
   private sessionModelSelection: ModelSelection | undefined;
+  /** Normalized SpeedStack session config (effort tier, MCP pruning). */
+  speedStackConfig: SpeedStackSessionConfig;
   private messageHistory: MessageHistory;
   private readFileState: ReadFileStateMap;
   private cachedTools: ModelToolContract[] | null = null;
@@ -274,6 +280,7 @@ export class AgentRuntime {
     // 旧会话的选择缺失不能阻断历史恢复；不在这里制造默认模型。
     this.sessionModelSelection =
       config.modelSelection && cloneModelSelection(config.modelSelection);
+    this.speedStackConfig = normalizeSpeedStackSessionConfig(config.speedStack);
     this.messageHistory = new MessageHistoryImpl();
     this.readFileState = new Map();
     this.runtimeCommandQueue = createRuntimeCommandQueue();
@@ -304,7 +311,11 @@ export class AgentRuntime {
       runtime.initializeMessageHistoryFromContext(this.contextBuilder, this.rootTraceContext);
       this.contextInitialized = true;
     }
-    runtime.startMcpStartup(this.rootTraceContext);
+    // MCP startup is intentionally NOT warmed up here: the first turn awaits
+    // the session's SystemOne route decision (see executeTurnCommand) before
+    // MCP servers connect, so the Z2 attach policy can filter them. The turn
+    // loop awaits initializeMcp before the first provider request, so
+    // delaying the warm-up changes no correctness guarantees.
   }
 
   async closeBrowserSession(): Promise<void> {

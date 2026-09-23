@@ -35,6 +35,8 @@ import type {
   ContextBuilder,
   ContextBuildResult,
 } from "./deps.js";
+import type { SpeedStackSessionConfig } from "../speedstack/effort-tiers.js";
+import type { SystemOneRouteDecision } from "../speedstack/systemone-route.js";
 import type {
   ActiveTurnSteeringState,
   ActiveTurnStartReservation,
@@ -100,6 +102,12 @@ export interface AgentRuntimeInternal
   residencyBlockingWorkCount: number;
   mcpInitialized: boolean;
   mcpToolsRegistered: boolean;
+  /** Normalized SpeedStackSessionConfig (effort tier, MCP pruning). */
+  speedStackConfig: SpeedStackSessionConfig;
+  /** Cached SystemOne route fetch (one per session; first task wins). */
+  systemOneRoutePromise?: Promise<SystemOneRouteDecision | undefined>;
+  /** Settled route decision; undefined until fetched or when fail-open. */
+  systemOneRouteValue?: SystemOneRouteDecision | undefined;
   subagentPort?: SubagentPort;
   dynamicWorkflowRunPort?: DynamicWorkflowRunPort;
   modelCatalogPort?: ModelCatalogPort;

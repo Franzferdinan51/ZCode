@@ -5,6 +5,11 @@ import {
   ZCODE_PLUGIN_ID_ENV_KEY,
 } from "@zcode/shared";
 import { registerMcpTools, traceContextToLogContext } from "../deps.js";
+import {
+  pruneMcpServerMap,
+  pruneMcpTools,
+} from "../../speedstack/mcp-pruning.js";
+import { resolveMcpAttachPolicy } from "../../speedstack/systemone-route.js";
 import type { McpConnectionSnapshot, McpServerConfig, TraceContext } from "../deps.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 
@@ -49,7 +54,44 @@ export function startMcpStartup(
     return undefined;
   }
 
-  const servers = this.config.mcp?.servers ?? {};
+  // Z2: route-driven MCP attach policy. The session's route decision is
+  // settled before the first turn reaches MCP startup (executeTurnCommand
+  // awaits it); a missing decision fails open to full attach.
+  // Kill-switches: ZCODE_SPEEDSTACK_PRUNE=0 env, or
+  // SpeedStackSessionConfig.mcpPruning=false. Every pruning decision is
+  // logged below with the skipped servers and the reason.
+  const mcpPolicy = resolveMcpAttachPolicy(this.systemOneRouteValue, this.speedStackConfig);
+  const configuredServers = this.config.mcp?.servers ?? {};
+  let servers = configuredServers;
+  if (!mcpPolicy.attachMcp) {
+    const skippedServers = Object.keys(configuredServers);
+    this.logger?.info("MCP servers skipped by SystemOne route decision", {
+      ...traceContextToLogContext(traceContext),
+      event: "mcp.servers.pruned",
+      module: "core.runtime",
+      reason: mcpPolicy.reason,
+      skippedServers,
+    });
+    servers = {};
+  } else {
+    const prunedServers = pruneMcpServerMap(
+      configuredServers,
+      this.speedStackConfig.mcpServerAllowlist,
+    );
+    const skippedServers = Object.keys(configuredServers).filter(
+      (name) => !(name in prunedServers),
+    );
+    if (skippedServers.length > 0) {
+      this.logger?.info("MCP servers pruned by session allowlist", {
+        ...traceContextToLogContext(traceContext),
+        event: "mcp.servers.pruned",
+        module: "core.runtime",
+        reason: "SpeedStackSessionConfig.mcpServerAllowlist",
+        skippedServers,
+      });
+    }
+    servers = prunedServers;
+  }
   if (Object.keys(servers).length === 0) {
     const startup = Promise.all([this.mcpPort.status(), this.mcpPort.listTools()])
       .then(([statuses, tools]) => ({ statuses, tools }))
@@ -135,7 +177,29 @@ export async function initializeMcp(
 
   try {
     const snapshot = await startup;
-    const registered = registerMcpTools(this.registry, mcpPort, snapshot.tools, {
+    // Z2: session tool allowlist ("server.tool" or bare "tool" names);
+    // undefined/empty = attach all (today's behavior).
+    const prunableTools = snapshot.tools.map((tool, index) => ({
+      index,
+      name: tool.name ?? tool.toolName,
+      serverName: tool.serverName,
+    }));
+    const keptIndexes = new Set(
+      pruneMcpTools(prunableTools, this.speedStackConfig.mcpToolAllowlist).map(
+        (tool) => tool.index,
+      ),
+    );
+    const attachTools = snapshot.tools.filter((_, index) => keptIndexes.has(index));
+    if (attachTools.length !== snapshot.tools.length) {
+      this.logger?.info("MCP tools pruned by session allowlist", {
+        ...traceContextToLogContext(traceContext),
+        event: "mcp.tools.pruned",
+        module: "core.runtime",
+        prunedCount: snapshot.tools.length - attachTools.length,
+        reason: "SpeedStackSessionConfig.mcpToolAllowlist",
+      });
+    }
+    const registered = registerMcpTools(this.registry, mcpPort, attachTools, {
       allowedTools: this.config.toolAllowlist,
       disallowedTools: this.config.toolDisallowlist,
       officialCuaServerNames: computeOfficialCuaServerNames(

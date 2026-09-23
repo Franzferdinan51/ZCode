@@ -41,6 +41,19 @@ export {
   type PrunableMcpTool,
 } from "./mcp-pruning.js";
 export {
+  SYSTEMONE_PRUNE_CONFIDENCE_THRESHOLD,
+  SYSTEMONE_PRUNE_KILL_SWITCH_ENV,
+  SYSTEMONE_ROUTE_ENDPOINT,
+  SYSTEMONE_ROUTE_TIMEOUT_MS,
+  applySystemOneEffortOverride,
+  fetchSystemOneRouteDecision,
+  resolveEffortTierAndOptions,
+  resolveMcpAttachPolicy,
+  type McpAttachPolicy,
+  type SystemOneRouteDecision,
+  type SystemOneRouteHolder,
+} from "./systemone-route.js";
+export {
   EMPTY_ANCHORS,
   archiveSessionTranscript,
   buildAnchoredSummaryPrompt,

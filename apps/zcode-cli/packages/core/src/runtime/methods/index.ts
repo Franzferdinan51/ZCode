@@ -80,6 +80,7 @@ import { loadProjectMemoryRoot } from "./context.js";
 import { logMemorySkipped } from "./context.js";
 import { injectPluginReferenceReminderFromTurn } from "./plugin-reference.js";
 import { initializeMcp } from "./mcp.js";
+import { ensureSystemOneRouteDecision } from "./systemone-route.js";
 import { startMcpStartup } from "./mcp.js";
 import { discoverSkillsForContext } from "./context.js";
 import { createConfigOnlyContextSnapshot } from "./context.js";
@@ -282,6 +283,7 @@ export function installAgentRuntimeMethods(ctor: AgentRuntimeConstructor): void 
   proto.logMemorySkipped = logMemorySkipped;
   proto.injectPluginReferenceReminderFromTurn = injectPluginReferenceReminderFromTurn;
   proto.initializeMcp = initializeMcp;
+  proto.ensureSystemOneRouteDecision = ensureSystemOneRouteDecision;
   proto.startMcpStartup = startMcpStartup;
   proto.discoverSkillsForContext = discoverSkillsForContext;
   proto.createConfigOnlyContextSnapshot = createConfigOnlyContextSnapshot;
