@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { buildReviewCommandPrompt, buildVerifyCommandPrompt } from "@zcode/core";
 
 const BUILTIN_PROMPT_COMMAND_PATTERN = /^\/([^\s]+)(?:\s+([\s\S]*))?$/;
 
@@ -11,7 +12,17 @@ export function resolveZCodeBuiltinPromptCommand(
   options: ResolveZCodeBuiltinPromptCommandOptions = {},
 ): string | undefined {
   const invocation = parseBuiltinPromptCommandInvocation(input);
-  if (!invocation || invocation.name !== "init") {
+  if (!invocation) {
+    return undefined;
+  }
+
+  if (invocation.name === "verify") {
+    return buildVerifyCommandPrompt(invocation.args);
+  }
+  if (invocation.name === "review") {
+    return buildReviewCommandPrompt(invocation.args);
+  }
+  if (invocation.name !== "init") {
     return undefined;
   }
 

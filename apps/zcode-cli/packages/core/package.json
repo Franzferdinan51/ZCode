@@ -21,6 +21,10 @@
     "./create-workflow-graph-bounds": {
       "types": "./dist/tool/handlers/create-workflow-graph-bounds.d.ts",
       "import": "./dist/tool/handlers/create-workflow-graph-bounds.js"
+    },
+    "./speedstack": {
+      "types": "./dist/speedstack/index.d.ts",
+      "import": "./dist/speedstack/index.js"
     }
   },
   "scripts": {

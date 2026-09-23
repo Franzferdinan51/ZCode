@@ -184,3 +184,7 @@ export type {
   SessionEventSink,
 } from "@zcode/contracts";
 export { LogLevel, SessionEventType } from "@zcode/contracts";
+
+// Speed-stack primitives (effort tiers, plan-then-execute, Ralph loop,
+// MCP pruning, anchored compaction, verify/review prompt builders)
+export * from "./speedstack/index.js";

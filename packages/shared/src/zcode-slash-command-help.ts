@@ -187,4 +187,24 @@ export const BUILTIN_ZCODE_SLASH_COMMAND_HELP_ENTRIES: readonly BuiltinZCodeSlas
       summary: "Show or set the current session goal.",
       usage: "/goal [pause|resume|clear|replace <objective>|<objective>]",
     },
+    {
+      details: [
+        "Runs a normal agent turn that builds the repo and runs its tests.",
+        "Reports PASS or FAIL per step with the failing output quoted.",
+        "Failures are reported, not fixed, unless you ask.",
+      ],
+      name: "verify",
+      summary: "Build and run tests, report pass/fail.",
+      usage: "/verify [scope]",
+    },
+    {
+      details: [
+        "Runs a normal agent turn that reviews recent changes.",
+        "Defaults to uncommitted changes and the most recent commit.",
+        "Reports findings ordered by severity; never changes code.",
+      ],
+      name: "review",
+      summary: "Review recent changes and report findings.",
+      usage: "/review [ref]",
+    },
   ] as const;

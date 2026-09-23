@@ -97,10 +97,22 @@ export type SlashCommand =
     }
   | {
       args: string;
+      name: "review";
+      rawName: string;
+      type: "known";
+    }
+  | {
+      args: string;
       name: "skill";
       rawName: string;
       skillName: string;
       task: string;
+      type: "known";
+    }
+  | {
+      args: string;
+      name: "verify";
+      rawName: string;
       type: "known";
     }
   | {

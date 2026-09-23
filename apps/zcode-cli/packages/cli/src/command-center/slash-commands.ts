@@ -141,6 +141,24 @@ export function parseSlashCommand(input: string): SlashCommand | null {
     };
   }
 
+  if (rawName === "verify") {
+    return {
+      args,
+      name: "verify",
+      rawName,
+      type: "known",
+    };
+  }
+
+  if (rawName === "review") {
+    return {
+      args,
+      name: "review",
+      rawName,
+      type: "known",
+    };
+  }
+
   if (rawName === "mode") {
     return {
       args,

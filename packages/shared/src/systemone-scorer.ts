@@ -279,3 +279,25 @@ export interface MlRouteServiceResponse {
   readonly reason: string;
   readonly detail?: string;
 }
+
+/** Per-task reasoning effort tier a route backend may hint at. */
+export type SystemOneRouteEffort = "low" | "medium" | "high";
+
+const SYSTEMONE_ROUTE_EFFORTS: readonly string[] = ["low", "medium", "high"];
+
+/**
+ * Fail-open extraction of an optional `effort` hint from a SystemOne-style
+ * route response object. Returns undefined for anything unexpected, so the
+ * caller keeps its current routing behavior. Use with
+ * resolveEffectiveEffortTier on the session side.
+ */
+export function extractRouteEffortHint(raw: unknown): SystemOneRouteEffort | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const record = raw as Record<string, unknown>;
+  const effort = record["effort"];
+  if (typeof effort !== "string") return undefined;
+  const normalized = effort.trim().toLowerCase();
+  return (SYSTEMONE_ROUTE_EFFORTS as readonly string[]).includes(normalized)
+    ? (normalized as SystemOneRouteEffort)
+    : undefined;
+}

@@ -159,6 +159,20 @@ export function createCommandCenter(deps: CommandCenterDeps): TuiSubmitPrompt {
         return attachCurrentSessionMetadata(await app.submitPrompt(prompt, options), deps, app);
       }
 
+      if (command.name === "verify") {
+        const app = await deps.getApp();
+        const prompt = command.args ? `/verify ${command.args}` : "/verify";
+        // 与 /init 同理：普通 prompt command，走 bootstrap resolver 展开。
+        return attachCurrentSessionMetadata(await app.submitPrompt(prompt, options), deps, app);
+      }
+
+      if (command.name === "review") {
+        const app = await deps.getApp();
+        const prompt = command.args ? `/review ${command.args}` : "/review";
+        // 与 /init 同理：普通 prompt command，走 bootstrap resolver 展开。
+        return attachCurrentSessionMetadata(await app.submitPrompt(prompt, options), deps, app);
+      }
+
       if (command.name === "expert") {
         return handleExpertCommand(command.args, deps, options);
       }
