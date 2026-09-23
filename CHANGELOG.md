@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.23.0 (2026-09-23)
+
+### Features
+
+* zero-setup SystemOne routing: shim bundled + auto-started
+  * The desktop GUI runs the same agent bundle as the CLI, so per-task SystemOne routing (route call, effort mapping, conservative MCP pruning) already applied to both — verified at the shared turn-loop layer, no separate desktop agent path exists
+  * The SystemOne Python shim is now bundled in the release (`systemone/`); ZCode probes `127.0.0.1:8765/healthz` at startup and auto-starts the bundled shim when nothing answers. A manually managed shim on :8765 is reused, never duplicated
+  * New master kill-switch `ZCODE_SYSTEMONE=0` disables auto-start and routing; existing `ZCODE_SPEEDSTACK_PRUNE=0` / `mcpPruning=false` unchanged; everything fail-open
+
 ## 3.20.0 (2026-09-22)
 
 ### Features

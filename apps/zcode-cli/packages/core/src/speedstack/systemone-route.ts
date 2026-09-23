@@ -40,6 +40,21 @@ export const SYSTEMONE_ROUTE_TIMEOUT_MS = 3_000;
 export const SYSTEMONE_PRUNE_KILL_SWITCH_ENV = "ZCODE_SPEEDSTACK_PRUNE";
 
 /**
+ * Master kill-switch (env): set `ZCODE_SYSTEMONE=0` to disable both the
+ * bundled-shim auto-start (see the CLI's systemone-shim-bootstrap) and all
+ * route lookups. The session then behaves exactly as if the shim never
+ * existed. Fail-open by construction.
+ */
+export const SYSTEMONE_KILL_SWITCH_ENV = "ZCODE_SYSTEMONE";
+
+/** True when the master SystemOne kill-switch is engaged. */
+export function isSystemOneDisabled(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return env[SYSTEMONE_KILL_SWITCH_ENV] === "0";
+}
+
+/**
  * Default pruning policy: only skip MCP servers when the router confidently
  * calls the task trivial. Conservative on purpose — anything ambiguous keeps
  * the full tool surface.
@@ -63,6 +78,7 @@ export async function fetchSystemOneRouteDecision(
   task: string,
   options?: { endpoint?: string; timeoutMs?: number },
 ): Promise<SystemOneRouteDecision | undefined> {
+  if (isSystemOneDisabled()) return undefined;
   const endpoint = options?.endpoint ?? SYSTEMONE_ROUTE_ENDPOINT;
   const timeoutMs = options?.timeoutMs ?? SYSTEMONE_ROUTE_TIMEOUT_MS;
   if (!task || !task.trim()) return undefined;

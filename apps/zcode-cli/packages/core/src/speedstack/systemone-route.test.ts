@@ -19,6 +19,7 @@ import { test } from "node:test";
 import {
   applySystemOneEffortOverride,
   fetchSystemOneRouteDecision,
+  isSystemOneDisabled,
   resolveEffortTierAndOptions,
   resolveMcpAttachPolicy,
   SYSTEMONE_PRUNE_CONFIDENCE_THRESHOLD,
@@ -199,4 +200,31 @@ test("MCP attach policy: env var set to 1 keeps pruning live", () => {
   } finally {
     delete process.env.ZCODE_SPEEDSTACK_PRUNE;
   }
+});
+
+test("ZCODE_SYSTEMONE=0 disables route lookups (master kill-switch)", async () => {
+  process.env.ZCODE_SYSTEMONE = "0";
+  try {
+    assert.equal(isSystemOneDisabled(), true);
+    // Even a live endpoint is never contacted when the kill-switch is set.
+    const decision = await fetchSystemOneRouteDecision("summarize this", {
+      endpoint: "http://127.0.0.1:8765/v1/systemone/route",
+      timeoutMs: 100,
+    });
+    assert.equal(decision, undefined);
+  } finally {
+    delete process.env.ZCODE_SYSTEMONE;
+  }
+});
+
+test("ZCODE_SYSTEMONE unset keeps route lookups live", async () => {
+  delete process.env.ZCODE_SYSTEMONE;
+  assert.equal(isSystemOneDisabled(), false);
+  // Guaranteed-dead port: fail-open still yields undefined, but the lookup
+  // was attempted (no kill-switch short-circuit).
+  const decision = await fetchSystemOneRouteDecision("summarize this", {
+    endpoint: "http://127.0.0.1:9/v1/systemone/route",
+    timeoutMs: 500,
+  });
+  assert.equal(decision, undefined);
 });

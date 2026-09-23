@@ -5,6 +5,10 @@ import { setCliProcessTitle } from "./process-name.js";
 import { applyCliRuntimeEnvSanitization } from "./env.js";
 import { ensureSeaRuntimeTools } from "./sea-runtime-tools.js";
 import { isPluginHostInvocation, runPluginHostCommand } from "./plugin-host-command.js";
+import {
+  ensureSystemOneShim,
+  shouldEnsureSystemOneShim,
+} from "./systemone-shim-bootstrap.js";
 import { scheduleCliExitWatchdog } from "./shutdown.js";
 import { installCliProcessErrorBoundary } from "./process-errors.js";
 import { installProtocolStderrBoundary } from "./protocol-stderr.js";
@@ -20,6 +24,17 @@ async function main(): Promise<void> {
   // 真实 zcode CLI 进程里仍可能有少量路径直接读取 process.env。
   // 入口先清洗用户 shell 注入的 NODE_ENV、代理和证书变量；网络变量只封存给后续 Bash/tool 子进程恢复。
   applyCliRuntimeEnvSanitization(process.env);
+  // Zero-setup SystemOne routing: probe 127.0.0.1:8765 and auto-start the
+  // bundled shim when nothing answers. Fail-open; ZCODE_SYSTEMONE=0 skips
+  // this and all route lookups. Plugin-host subprocesses are skipped — the
+  // parent agent process already bootstrapped.
+  if (
+    shouldEnsureSystemOneShim(argv, {
+      isPluginHost: isPluginHostInvocation(argv),
+    })
+  ) {
+    await ensureSystemOneShim({ stderr: process.stderr }).catch(() => {});
+  }
   const isProtocol = isProtocolServerInvocation(argv);
   const isTui = isTuiInvocation(argv);
   if (isProtocol) installProtocolStderrBoundary(process.stderr);

@@ -11,6 +11,7 @@ import {
   stageTuiRuntime,
 } from "./zcode-distribution/assets.mjs";
 import { installScriptSource } from "./zcode-distribution/installer.mjs";
+import { stageSystemOneShim } from "./zcode-distribution/systemone-shim.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const defaultOutDir = resolve(root, "dist", "zcode");
@@ -202,6 +203,8 @@ async function stageZCodePackage({ packageRoot, version }) {
   await stageTuiRuntime(packageRoot);
   await copyRuntimeNodeModules(packageRoot);
   await patchNodePtyPrebuilds(packageRoot);
+
+  await stageSystemOneShim(packageRoot);
 
   await mkdir(resolve(packageRoot, "bin"), {
     recursive: true,

@@ -43,10 +43,12 @@ export {
 export {
   SYSTEMONE_PRUNE_CONFIDENCE_THRESHOLD,
   SYSTEMONE_PRUNE_KILL_SWITCH_ENV,
+  SYSTEMONE_KILL_SWITCH_ENV,
   SYSTEMONE_ROUTE_ENDPOINT,
   SYSTEMONE_ROUTE_TIMEOUT_MS,
   applySystemOneEffortOverride,
   fetchSystemOneRouteDecision,
+  isSystemOneDisabled,
   resolveEffortTierAndOptions,
   resolveMcpAttachPolicy,
   type McpAttachPolicy,

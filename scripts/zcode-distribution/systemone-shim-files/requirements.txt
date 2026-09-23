@@ -1,0 +1,14 @@
+# Runtime requirements for the ZCode-bundled SystemOne shim
+# (release <root>/systemone). Install once per machine that should
+# auto-start the shim:
+#
+#   pip install -r requirements.txt
+#
+# The GLiClass model (knowledgator/gliclass-edge-v3.0) is fetched from
+# Hugging Face automatically on the shim's first start and cached in
+# ~/.cache/huggingface (HF_HOME / TRANSFORMERS_CACHE honored).
+
+torch
+transformers
+gliclass
+numpy
