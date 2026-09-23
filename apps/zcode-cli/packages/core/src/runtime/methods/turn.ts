@@ -62,7 +62,17 @@ import {
 import { scheduleProjectMemoryExtraction } from "../helpers/project-memory-extraction.js";
 import { appendBrowserTurnScreenshot } from "./browser-turn-screenshot.js";
 import { clearBrowserTurnState } from "../../repl/browser-turn-state.js";
-import { applySubmissionExecutionState, createTurnModel } from "./turn-model.js";
+import {
+  applySubmissionExecutionState,
+  applySystemOneModelRetarget,
+  createTurnModel,
+} from "./turn-model.js";
+import { createRuntimeModel } from "./runtime-model.js";
+import {
+  normalizeSpeedStackSessionConfig,
+  resolveThinkingTier,
+} from "../../speedstack/effort-tiers.js";
+import { extractRouteEffortHint } from "@zcode/shared/systemone-scorer";
 import { rebuildContextPrefix } from "./context-refresh.js";
 
 const TARGET_RUN_HEARTBEAT_MS = 15_000;
@@ -100,7 +110,8 @@ export async function executeTurnCommand(
   // 普通 Turn 过去在异步初始化完成后才读取 Session Selection/输出样式，
   // 初始化期间发生的切模会越过 admission 边界，错误影响已经开始的 Turn。
   // 这里在任何 await 之前冻结本轮事实；后续配置变化只作用于下一轮。
-  const admittedModelSelection = options?.intent?.modelSelection ?? this.getSessionModelSelection();
+  let admittedModelSelection =
+    options?.intent?.modelSelection ?? this.getSessionModelSelection();
   const admittedOutputStyle = this.config.outputStyle;
   const compactInstructions = parseCompactCommand(input);
   const rewindCommand = parseRewindCommand(input);
@@ -185,11 +196,99 @@ export async function executeTurnCommand(
       const executionStartedAt = performance.timeOrigin + performance.now();
       beginLocalTurnPreparation(turnTraceContext, "execution")();
       throwIfTurnAborted(turnAbortSignal);
-      // Speed Stack: one SystemOne route lookup per session (cached; first
-      // task wins). The decision drives the Z1 effort override and the Z2
-      // MCP attach policy. Fail-open: shim down/unreachable -> undefined ->
-      // today's behavior exactly.
-      await this.ensureSystemOneRouteDecision(input);
+      // Speed Stack: one SystemOne route lookup per task. The decision
+      // drives Z0 model routing ("Auto (SystemOne)"), the Z1 effort override
+      // and the Z2 MCP attach policy. Z0/Z1 are fully independent: the route
+      // may move the model while thinking is pinned/off, and a pinned/off
+      // thinking mode never blocks the model retarget. Fail-open: shim
+      // down/unreachable -> undefined -> today's behavior exactly.
+      //
+      // Per-submit speed-stack knobs (desktop composer / CLI flags) merge
+      // over the runtime's session config for this turn.
+      const intentSpeedStack = normalizeSpeedStackSessionConfig(
+        options?.intent?.speedStack,
+      );
+      this.speedStackConfig = { ...this.speedStackConfig, ...intentSpeedStack };
+      const routeDecision = await this.ensureSystemOneRouteDecision(input);
+      // Z0: retarget the session model in place when model routing is on.
+      const retarget = await applySystemOneModelRetarget(
+        this,
+        routeDecision,
+        admittedModelSelection,
+        turnTraceContext,
+      );
+      if (retarget.selection) {
+        // This turn (and, via the persisted session selection, the session)
+        // runs on the routed model. The Z1 effort override still applies on
+        // top in createTurnModel via the shared route value.
+        admittedModelSelection = retarget.selection;
+      }
+      // Stash per-turn routing facts for transparency surfaces (UI chip,
+      // headless logs): the actual model + applied thinking for this task.
+      // The effort is the RESOLVED tier (same precedence Z1 applies), not
+      // just the route hint: off / pinned tier win over the hint.
+      const resolvedThinking = resolveThinkingTier({
+        thinkingMode: this.speedStackConfig.thinkingMode,
+        explicitTier: this.speedStackConfig.effortTier,
+        routeHint: extractRouteEffortHint(routeDecision),
+      });
+      const appliedEffort =
+        resolvedThinking?.kind === "tier"
+          ? resolvedThinking.tier
+          : (resolvedThinking?.kind ?? routeDecision?.effort);
+      this.systemOneTurnRouting = {
+        tier: routeDecision?.tier,
+        confidence: routeDecision?.confidence,
+        effort: appliedEffort,
+        modelRouting: this.speedStackConfig.modelRouting === true,
+        thinkingMode: this.speedStackConfig.thinkingMode,
+        retargetedModelId: retarget.retargetedModelId,
+        modelId: admittedModelSelection?.modelId,
+      };
+      // Pinned-model routing facts: when a route exists but Z0 did not
+      // retarget (routing off / no target / same model), the ModelSelected
+      // above never fired — emit the routing facts here with the admitted
+      // pinned model and the resolved effort so the per-response chip stays
+      // fresh. Retargeting already emitted; never double-emit.
+      // Fail-open: transparency-only, never breaks the turn.
+      if (routeDecision?.tier && !retarget.selection && admittedModelSelection) {
+        try {
+          const pinnedModel = createRuntimeModel(this, {
+            selection: admittedModelSelection,
+          });
+          await this.emitModelSelected({
+            model: pinnedModel,
+            modelSelection: admittedModelSelection,
+            effectiveReasoningLevel: pinnedModel.options.reasoningLevel,
+            supportedThoughtLevels: pinnedModel.optionSpecs.reasoningLevel.values,
+            systemOneRouting: {
+              tier: routeDecision.tier,
+              effort: typeof appliedEffort === "string" ? appliedEffort : "medium",
+              confidence: routeDecision.confidence,
+              retargeted: false,
+            },
+            traceContext: turnTraceContext,
+          });
+        } catch (error) {
+          this.logger?.warn("SystemOne pinned-model routing facts skipped", {
+            error: error instanceof Error ? error.message : String(error),
+            event: "systemone.routing_facts_skipped",
+            module: "core.runtime",
+          });
+        }
+      }
+      if (routeDecision) {
+        this.logger?.info("SystemOne route applied for turn", {
+          event: "systemone.turn.routed",
+          module: "core.runtime",
+          tier: routeDecision.tier,
+          effort: appliedEffort,
+          confidence: routeDecision.confidence,
+          modelId: admittedModelSelection?.modelId,
+          retargetedModelId: retarget.retargetedModelId ?? null,
+          thinkingMode: this.speedStackConfig.thinkingMode ?? null,
+        });
+      }
       let admittedModel;
       try {
         admittedModel =

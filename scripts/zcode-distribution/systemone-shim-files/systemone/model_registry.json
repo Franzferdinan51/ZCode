@@ -1,0 +1,24 @@
+{
+  "_comment": "Tiered model registry for the SystemOne model router (POST /v1/systemone/route). The router uses a cheap local GLiClass decision engine (Jev-style) to pick the CHEAPEST tier sufficient for each task. Tier descriptions are written contrastively (what each tier FAILS at) because the zero-shot classifier discriminates on capability boundaries, not marketing copy. Tiers with model_id=null are not routable until configured. latency_ms_p50: fill from measured runs (the shim logs per-decision latency to logs/systemone-shim.log) so routing claims carry receipts. Models served by LM Studio on the Mac mini (http://100.68.208.113:1234/v1) unless noted.",
+  "tiers": {
+    "economy": {
+      "cost": "cheapest local LLM; fastest responses",
+      "description": "Handles ONLY trivial tasks: one-sentence summaries, simple factual Q&A, basic rewrites, classification, extraction. FAILS at reasoning, code, math, navigation, tool use, browser actions, or anything multi-step or agentic.",
+      "latency_ms_p50": null,
+      "model_id": "minicpm5-2b"
+    },
+    "balanced": {
+      "cost": "mid local LLM; moderate latency",
+      "description": "Handles everyday tasks: explanations, emails, brainstorming, simple scripts, planning, general chat. FAILS at hard reasoning, complex debugging, advanced math, large codebases.",
+      "latency_ms_p50": null,
+      "model_id": "ornith-1.5-9b"
+    },
+    "heavy": {
+      "cost": "strongest local LLM; highest latency",
+      "description": "Handles HARD tasks: complex reasoning, code generation and debugging, multithreaded race conditions, advanced math, long-context analysis, agent planning, multi-step browser navigation and automation, MCP tool calls, high-stakes judgment. Ryan's preferred model.",
+      "latency_ms_p50": null,
+      "model_id": "ornith-1.5-35b-a3b",
+      "note": "LM Studio on the Mac mini. Only one model loaded at a time on the Windows PC - the Mac mini serves this fleet."
+    }
+  }
+}

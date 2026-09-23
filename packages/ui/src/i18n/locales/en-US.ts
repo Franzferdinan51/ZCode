@@ -4586,6 +4586,7 @@ const enUS: Record<string, string> = {
   "chat.toolbar.thoughtLevel.value.xhigh": "Extra high",
   "chat.toolbar.thoughtLevel.value.max": "Max",
   "chat.toolbar.thoughtLevel.value.ultra": "Ultra",
+  "chat.toolbar.thoughtLevel.value.auto": "Auto",
   "chat.longRunning.expand": "Expand long-running panel",
   "chat.longRunning.collapse": "Collapse long-running panel",
   "chat.longRunning.elapsedSeconds": "Running for {seconds}s",

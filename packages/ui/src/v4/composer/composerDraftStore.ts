@@ -11,6 +11,10 @@
 import { logger } from "@/logger.js";
 import { modelSelectionSchema, type ModelSelection } from "@zcode/shared";
 import { submissionModeSchema, type SubmissionMode } from "@zcode/shared/zcode-protocol-v4";
+import {
+  speedStackWireConfigSchema,
+  type SpeedStackWireConfig,
+} from "@zcode/shared/speedstack-wire";
 import type { ComposerMentionPrefill } from "@/store/zcodeSessionStoreTypes.js";
 
 export interface V4ComposerDraft {
@@ -24,6 +28,11 @@ export interface V4ComposerDraft {
   lastPlanTransitionId?: string;
   lastPermissionGrantId?: string;
   modelSelection?: ModelSelection;
+  /**
+   * SystemOne speed-stack knobs (modelRouting toggle + thinkingMode).
+   * Optional: old drafts without it keep today's defaults (no silent flips).
+   */
+  speedStack?: SpeedStackWireConfig;
   /** 首次分享导入等待公共新任务初始化；不能由空 Session snapshot 抢先填充。 */
   initializeFromNewTask?: true;
   updatedAt: number;
@@ -133,6 +142,10 @@ function readDraft(value: unknown): V4ComposerDraft | null {
       ? { lastPlanTransitionId: value.lastPlanTransitionId }
       : {}),
     ...(modelSelection ? { modelSelection } : {}),
+    ...(() => {
+      const parsed = speedStackWireConfigSchema.safeParse(value.speedStack);
+      return parsed.success ? { speedStack: parsed.data } : {};
+    })(),
     ...(value.initializeFromNewTask === true && !mode.success
       ? { initializeFromNewTask: true as const }
       : {}),

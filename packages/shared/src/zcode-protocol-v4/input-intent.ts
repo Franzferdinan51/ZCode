@@ -4,6 +4,7 @@ import { z } from "zod";
 import { timestampSchema } from "./core.js";
 import { attachmentRefSchema } from "./attachment-ref.js";
 import { modelSelectionSchema } from "../model-selection.js";
+import { speedStackWireConfigSchema } from "../speedstack-wire.js";
 import { submissionModeSchema } from "./submission.js";
 import { sharedContextRefSchema } from "./shared-context-ref.js";
 
@@ -49,6 +50,8 @@ export const conversationInputIntentSchema = z
     modelSelection: modelSelectionSchema.optional(),
     mode: submissionModeSchema.optional(),
     planEnabled: z.boolean().optional(),
+    // Speed-stack routing knobs (3.24.0, additive): survives queue admission.
+    speedStack: speedStackWireConfigSchema.optional(),
     sharedContextRefs: z.array(sharedContextRefSchema).max(1).optional(),
     delivery: conversationInputDeliverySchema,
     order: conversationInputOrderSchema,

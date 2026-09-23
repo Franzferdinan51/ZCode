@@ -102,12 +102,24 @@ export interface AgentRuntimeInternal
   residencyBlockingWorkCount: number;
   mcpInitialized: boolean;
   mcpToolsRegistered: boolean;
-  /** Normalized SpeedStackSessionConfig (effort tier, MCP pruning). */
+  /** Normalized SpeedStackSessionConfig (model routing, thinking mode, MCP pruning). */
   speedStackConfig: SpeedStackSessionConfig;
-  /** Cached SystemOne route fetch (one per session; first task wins). */
-  systemOneRoutePromise?: Promise<SystemOneRouteDecision | undefined>;
-  /** Settled route decision; undefined until fetched or when fail-open. */
+  /** Settled route decision for the current task; undefined until fetched or when fail-open. */
   systemOneRouteValue?: SystemOneRouteDecision | undefined;
+  /**
+   * Per-turn SystemOne routing facts for transparency surfaces (UI chip,
+   * headless logs): the route's tier/effort, whether model routing was on,
+   * the thinking mode, and the model this task actually ran on.
+   */
+  systemOneTurnRouting?: {
+    tier?: string;
+    confidence?: number;
+    effort?: string;
+    modelRouting?: boolean;
+    thinkingMode?: string;
+    retargetedModelId?: string;
+    modelId?: string;
+  };
   subagentPort?: SubagentPort;
   dynamicWorkflowRunPort?: DynamicWorkflowRunPort;
   modelCatalogPort?: ModelCatalogPort;

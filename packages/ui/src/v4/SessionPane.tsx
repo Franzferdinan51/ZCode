@@ -117,6 +117,7 @@ import { shouldIgnoreEscapeForStopGeneration } from "@/v4/composer/escapeStop.js
 import { ConversationDraftEmptyState } from "@/v4/ConversationDraftEmptyState.js";
 import { ConversationDraftSuggestedPromptsContainer } from "@/v4/ConversationDraftSuggestedPromptsContainer.js";
 import { ConversationHeader, type PaneWorkspaceBadge } from "@/v4/ConversationHeader.js";
+import { SystemOneRoutingBadge } from "@/v4/SystemOneRoutingBadge.js";
 import { ConversationQueuePanel } from "@/v4/ConversationQueuePanel.js";
 import { projectPendingGuideQueue } from "@/v4/pendingGuideProjection.js";
 import { PendingCommandRecoveryBanner } from "@/v4/PendingCommandRecoveryBanner.js";
@@ -1232,6 +1233,7 @@ export function SessionPane({
     resolveInitialDraftConfig,
     handleDraftSelectModel,
     handleDraftSelectThought,
+    handleDraftSelectModelRouting,
     handleDraftSwitchMode,
     promoteComposerDraft,
     captureAcceptedModelSelection,
@@ -3412,6 +3414,13 @@ export function SessionPane({
     [handleDraftSelectThought],
   );
 
+  const handleSelectModelRouting = useCallback(
+    (enabled: boolean) => {
+      handleDraftSelectModelRouting(enabled);
+    },
+    [handleDraftSelectModelRouting],
+  );
+
   const handleRecoverCustomModelSelection = useCallback(
     async (value: string, sourceModel: ModelSelectionSource | null) => {
       const decoded = decodeCustomModelValue(value);
@@ -4331,6 +4340,7 @@ export function SessionPane({
       onComposerRestoreApplied={handleComposerRestoreApplied}
       onStop={handleStopFromButton}
       onSelectModel={handleSelectModel}
+      onSelectModelRouting={handleSelectModelRouting}
       onSelectThought={handleSelectThought}
       onSwitchMode={handleSwitchMode}
       onOpenRunningBackgroundWorks={
@@ -4521,6 +4531,11 @@ export function SessionPane({
         onClosePane={onClosePane}
         workspaceBadge={workspaceBadge}
       />
+      {snapshot?.systemOneLastRouting ? (
+        <div className="flex items-center gap-2 px-3 pt-1">
+          <SystemOneRoutingBadge routing={snapshot.systemOneLastRouting} />
+        </div>
+      ) : null}
 
       <div
         ref={conversationLayoutContainerRef}

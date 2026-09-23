@@ -20,6 +20,7 @@ import {
   sessionModelTransitionSchema,
   sessionUsageStateSchema,
   subagentProjectionStateSchema,
+  systemOneRoutingInfoSchema,
   workspaceHookAdmissionStateSchema,
 } from "./snapshot.js";
 import { workflowRunsStateSchema } from "./workflow-runs.js";
@@ -47,6 +48,9 @@ export const statePatchSchema = z.object({
   plan: planStateSchema.nullable().optional(),
   // 软门禁：null = pending 清零(提示条消失);对象 = 待审核状态更新。
   workspaceHookAdmission: workspaceHookAdmissionStateSchema.nullable().optional(),
+  // SystemOne: last turn's routing facts. Container is not strict, so old
+  // desktops strip this key and keep the rest of the patch.
+  systemOneLastRouting: systemOneRoutingInfoSchema.nullable().optional(),
 });
 export type StatePatch = z.infer<typeof statePatchSchema>;
 

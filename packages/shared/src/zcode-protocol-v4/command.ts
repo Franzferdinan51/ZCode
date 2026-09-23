@@ -7,6 +7,7 @@ import { conversationRowTargetSchema, timestampSchema } from "./core.js";
 import { attachmentRefSchema } from "./attachment-ref.js";
 import { v4ConversationFileRewindPreviewResultSchema } from "./transport.js";
 import { modelSelectionSchema } from "../model-selection.js";
+import { speedStackWireConfigSchema } from "../speedstack-wire.js";
 import { modelExecutionSchema } from "../model-execution.js";
 import { submissionModeSchema } from "./submission.js";
 import {
@@ -37,6 +38,9 @@ const createSessionRequestedConfigSchema = z.object({
   // 会把“没传 mode”误变成“请求切回 build”，覆盖 workspace 默认 yolo。
   mode: z.string().optional(),
   planEnabled: z.boolean().optional(),
+  // Speed-stack routing knobs (3.24.0, additive): modelRouting
+  // ("Auto (SystemOne)") and thinkingMode (off/auto/pinned tier).
+  speedStack: speedStackWireConfigSchema.optional(),
 });
 
 // ── 命令 payload 全集 ──
@@ -51,6 +55,7 @@ export const commandPayloadSchemas = {
         modelSelection: modelSelectionSchema.optional(),
         mode: submissionModeSchema.optional(),
         planEnabled: z.boolean().optional(),
+        speedStack: speedStackWireConfigSchema.optional(),
       })
       .optional(),
     config: createSessionRequestedConfigSchema.optional(),
@@ -97,6 +102,10 @@ export const commandPayloadSchemas = {
       modelSelection: modelSelectionSchema.optional(),
       mode: submissionModeSchema.optional(),
       planEnabled: z.boolean().optional(),
+      // Speed-stack routing knobs (3.24.0): modelRouting ("Auto (SystemOne)")
+      // and thinkingMode (off/auto/pinned tier). Independent switches;
+      // carried into the turn intent's speedStack. Absent = current behavior.
+      speedStack: speedStackWireConfigSchema.optional(),
       // 本次执行仍使用上面的标准 Selection；这里只携带不持久化语义、动态鉴权和 child 策略。
       // 仅 idle startNow 接受，防止 Secret/Ticket 进入普通 CommandInbox。
       modelExecution: modelExecutionSchema.optional(),

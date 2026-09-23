@@ -22,9 +22,11 @@ import {
   isSystemOneDisabled,
   resolveEffortTierAndOptions,
   resolveMcpAttachPolicy,
+  resolveSystemOneModelTarget,
   SYSTEMONE_PRUNE_CONFIDENCE_THRESHOLD,
+  type EffortResolution,
   type SystemOneRouteDecision,
-} from "./systemone-route.js";
+} from "./systemone-route.ts";
 
 const TIER_MODEL = {
   optionSpecs: {
@@ -45,12 +47,19 @@ function route(overrides: Partial<SystemOneRouteDecision> = {}): SystemOneRouteD
   };
 }
 
-test("route decision economy/low maps to low reasoning level and small output cap", () => {
-  const resolved = resolveEffortTierAndOptions({
-    route: route({ tier: "economy", effort: "low", confidence: 0.9 }),
-    model: TIER_MODEL,
-  });
+function expectTier(resolved: EffortResolution | undefined): Extract<EffortResolution, { kind: "tier" }> {
   assert.ok(resolved, "expected a resolved effort");
+  assert.equal(resolved.kind, "tier");
+  return resolved;
+}
+
+test("route decision economy/low maps to low reasoning level and small output cap", () => {
+  const resolved = expectTier(
+    resolveEffortTierAndOptions({
+      route: route({ tier: "economy", effort: "low", confidence: 0.9 }),
+      model: TIER_MODEL,
+    }),
+  );
   assert.equal(resolved.tier, "low");
   assert.equal(resolved.options.reasoningLevel, "low");
   // low -> LOW_TIER_MAX_OUTPUT_TOKENS (4000), capped by the model max
@@ -58,36 +67,113 @@ test("route decision economy/low maps to low reasoning level and small output ca
 });
 
 test("route decision balanced/medium maps to medium reasoning level and medium budget", () => {
-  const resolved = resolveEffortTierAndOptions({
-    route: route({ tier: "balanced", effort: "medium", confidence: 0.9 }),
-    model: TIER_MODEL,
-  });
-  assert.ok(resolved);
+  const resolved = expectTier(
+    resolveEffortTierAndOptions({
+      route: route({ tier: "balanced", effort: "medium", confidence: 0.9 }),
+      model: TIER_MODEL,
+    }),
+  );
   assert.equal(resolved.tier, "medium");
   assert.equal(resolved.options.reasoningLevel, "medium");
   // medium -> MEDIUM_TIER_MAX_OUTPUT_TOKENS (12000)
   assert.equal(resolved.options.maxOutputTokens, 12000);
 });
 
-test("route decision heavy/high maps to high reasoning level and full output cap", () => {
-  const resolved = resolveEffortTierAndOptions({
-    route: route({ tier: "heavy", effort: "high", confidence: 0.9 }),
-    model: TIER_MODEL,
-  });
-  assert.ok(resolved);
+test("route decision heavy/high maps to the high budget (32000), capped by model max", () => {
+  const resolved = expectTier(
+    resolveEffortTierAndOptions({
+      route: route({ tier: "heavy", effort: "high", confidence: 0.9 }),
+      model: TIER_MODEL,
+    }),
+  );
   assert.equal(resolved.tier, "high");
   assert.equal(resolved.options.reasoningLevel, "high");
+  // high -> HIGH_TIER_MAX_OUTPUT_TOKENS (32000)
+  assert.equal(resolved.options.maxOutputTokens, 32000);
+});
+
+test("route decision heavy/xhigh maps to the xhigh budget (64000), capped by model max", () => {
+  const resolved = expectTier(
+    resolveEffortTierAndOptions({
+      route: route({ tier: "heavy", effort: "xhigh", confidence: 0.95 }),
+      model: TIER_MODEL,
+    }),
+  );
+  assert.equal(resolved.tier, "xhigh");
+  // xhigh -> XHIGH_TIER_MAX_OUTPUT_TOKENS (64000); model max is 64000
+  assert.equal(resolved.options.maxOutputTokens, 64000);
+});
+
+test("route decision heavy/ultra maps to the model maximum (no ZCode-side cap)", () => {
+  const resolved = expectTier(
+    resolveEffortTierAndOptions({
+      route: route({ tier: "heavy", effort: "ultra", confidence: 0.99 }),
+      model: TIER_MODEL,
+    }),
+  );
+  assert.equal(resolved.tier, "ultra");
   assert.equal(resolved.options.maxOutputTokens, 64000);
 });
 
 test("explicit session effort tier overrides the route decision", () => {
+  const resolved = expectTier(
+    resolveEffortTierAndOptions({
+      config: { effortTier: "high" },
+      route: route({ tier: "economy", effort: "low", confidence: 0.99 }),
+      model: TIER_MODEL,
+    }),
+  );
+  assert.equal(resolved.tier, "high");
+});
+
+test("thinkingMode pinned tier beats the route hint", () => {
+  const resolved = expectTier(
+    resolveEffortTierAndOptions({
+      config: { thinkingMode: "ultra" },
+      route: route({ tier: "economy", effort: "low", confidence: 0.99 }),
+      model: TIER_MODEL,
+    }),
+  );
+  assert.equal(resolved.tier, "ultra");
+});
+
+test("thinkingMode off resolves to thinking-off (no tier)", () => {
   const resolved = resolveEffortTierAndOptions({
-    config: { effortTier: "high" },
-    route: route({ tier: "economy", effort: "low", confidence: 0.99 }),
+    config: { thinkingMode: "off" },
+    route: route({ tier: "heavy", effort: "ultra", confidence: 0.99 }),
     model: TIER_MODEL,
   });
   assert.ok(resolved);
-  assert.equal(resolved.tier, "high");
+  assert.equal(resolved.kind, "off");
+});
+
+test("thinkingMode auto follows the route hint", () => {
+  const resolved = expectTier(
+    resolveEffortTierAndOptions({
+      config: { thinkingMode: "auto" },
+      route: route({ tier: "balanced", effort: "medium", confidence: 0.9 }),
+      model: TIER_MODEL,
+    }),
+  );
+  assert.equal(resolved.tier, "medium");
+});
+
+test("modelRouting does not gate thinking resolution (independence)", () => {
+  // Route moves the model AND thinking is pinned: both apply.
+  const resolved = expectTier(
+    resolveEffortTierAndOptions({
+      config: { thinkingMode: "low", modelRouting: true },
+      route: route({ tier: "heavy", effort: "ultra", confidence: 0.99 }),
+      model: TIER_MODEL,
+    }),
+  );
+  assert.equal(resolved.tier, "low");
+  const target = resolveSystemOneModelTarget({
+    route: route({ modelId: "other-model" }),
+    modelRouting: true,
+    currentModelId: "test-model",
+  });
+  assert.equal(target, "other-model");
 });
 
 test("missing route decision resolves nothing (fail-open)", () => {
@@ -97,6 +183,64 @@ test("missing route decision resolves nothing (fail-open)", () => {
 test("route without a usable effort resolves nothing (fail-open)", () => {
   const bad = route({ effort: "bogus" as unknown as "low" });
   assert.equal(resolveEffortTierAndOptions({ route: bad, model: TIER_MODEL }), undefined);
+});
+
+test("model target: routing off keeps the pinned model", () => {
+  assert.equal(
+    resolveSystemOneModelTarget({
+      route: route({ modelId: "other-model" }),
+      modelRouting: false,
+      currentModelId: "test-model",
+    }),
+    undefined,
+  );
+  assert.equal(
+    resolveSystemOneModelTarget({
+      route: route({ modelId: "other-model" }),
+      modelRouting: undefined,
+      currentModelId: "test-model",
+    }),
+    undefined,
+  );
+});
+
+test("model target: same model or missing model id resolves nothing", () => {
+  assert.equal(
+    resolveSystemOneModelTarget({
+      route: route({ modelId: "test-model" }),
+      modelRouting: true,
+      currentModelId: "test-model",
+    }),
+    undefined,
+  );
+  assert.equal(
+    resolveSystemOneModelTarget({
+      route: route({ modelId: undefined }),
+      modelRouting: true,
+      currentModelId: "test-model",
+    }),
+    undefined,
+  );
+  assert.equal(
+    resolveSystemOneModelTarget({
+      route: undefined,
+      modelRouting: true,
+      currentModelId: "test-model",
+    }),
+    undefined,
+  );
+});
+
+test("model target: thinkingMode never gates model routing", () => {
+  // Thinking off + model routing on: the model still moves.
+  assert.equal(
+    resolveSystemOneModelTarget({
+      route: route({ modelId: "other-model" }),
+      modelRouting: true,
+      currentModelId: "test-model",
+    }),
+    "other-model",
+  );
 });
 
 test("applySystemOneEffortOverride binds the model with route options", () => {
@@ -121,6 +265,53 @@ test("applySystemOneEffortOverride binds the model with route options", () => {
   const options = bound[0] as { reasoningLevel: string; maxOutputTokens: number };
   assert.equal(options.reasoningLevel, "low");
   assert.equal(options.maxOutputTokens, 4000);
+});
+
+test("applySystemOneEffortOverride with thinkingMode off binds the off level", () => {
+  const bound: unknown[] = [];
+  const fakeModel = {
+    options: { reasoningLevel: "high", maxOutputTokens: 64000 },
+    optionSpecs: {
+      reasoningLevel: { values: ["off", "low", "high"] },
+      maxOutputTokens: { max: 64000 },
+    },
+    bind(options?: unknown) {
+      bound.push(options);
+      return this;
+    },
+  };
+  const out = applySystemOneEffortOverride(
+    {
+      speedStackConfig: { thinkingMode: "off" },
+      systemOneRouteValue: route({ tier: "heavy", effort: "ultra" }),
+    },
+    fakeModel,
+  );
+  assert.equal(out, fakeModel);
+  assert.equal(bound.length, 1);
+  const options = bound[0] as { reasoningLevel: string };
+  assert.equal(options.reasoningLevel, "off");
+});
+
+test("applySystemOneEffortOverride with thinkingMode off and no off level leaves the model untouched", () => {
+  let bindCalls = 0;
+  const fakeModel = {
+    options: {},
+    optionSpecs: TIER_MODEL.optionSpecs,
+    bind() {
+      bindCalls += 1;
+      return this;
+    },
+  };
+  const out = applySystemOneEffortOverride(
+    {
+      speedStackConfig: { thinkingMode: "off" },
+      systemOneRouteValue: route({ tier: "heavy", effort: "ultra" }),
+    },
+    fakeModel,
+  );
+  assert.equal(out, fakeModel);
+  assert.equal(bindCalls, 0);
 });
 
 test("applySystemOneEffortOverride without a route returns the model untouched", () => {

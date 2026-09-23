@@ -1,5 +1,6 @@
 import { extname } from "node:path";
 import { formatJson, type PresentationSurface } from "@zcode/core";
+import type { ThinkingMode } from "@zcode/core";
 import type { RunContext, GlobalOptions } from "@zcode/shared-types";
 import { loadBootstrapModule } from "./bootstrap-loader.js";
 import {
@@ -232,6 +233,18 @@ export const runPrompt = async (
         modelStreaming: "on",
         presentationSurface,
         workingDirectory,
+        // 3.24.0: --model auto / --thinking <mode> → per-run speed-stack knobs.
+        // modelRouting and thinkingMode are independent; either may be set alone.
+        ...(options.model === "auto" || options.thinking
+          ? {
+              speedStack: {
+                ...(options.model === "auto" ? { modelRouting: true } : {}),
+                ...(options.thinking
+                  ? { thinkingMode: options.thinking as ThinkingMode }
+                  : {}),
+              },
+            }
+          : {}),
       },
       sessionId,
       uiDetectedLocale: options.detectedLocale,

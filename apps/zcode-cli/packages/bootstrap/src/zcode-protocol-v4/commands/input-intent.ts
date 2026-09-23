@@ -2,6 +2,7 @@ import type { TurnInputIntentMetadata } from "@zcode/contracts";
 import type { ModelSelection } from "@zcode/shared";
 import type { AttachmentRef, CommandEnvelope, QueueItem } from "@zcode/shared/zcode-protocol-v4";
 import type { SubmissionMode } from "@zcode/shared/zcode-protocol-v4";
+import type { SpeedStackWireConfig } from "@zcode/shared/speedstack-wire";
 import { commandAdmissionOf } from "./executor.js";
 
 interface CanonicalCommandIntent {
@@ -10,6 +11,7 @@ interface CanonicalCommandIntent {
   modelSelection?: ModelSelection;
   mode?: SubmissionMode;
   planEnabled?: boolean;
+  speedStack?: SpeedStackWireConfig;
   sourceCommandId?: string;
   clientId?: string;
   queueItemId?: string;
@@ -32,6 +34,7 @@ export function inputIntentMetadata(
     modelSelection?: ModelSelection;
     mode?: SubmissionMode;
     planEnabled?: boolean;
+    speedStack?: SpeedStackWireConfig;
     sharedContextRefs?: TurnInputIntentMetadata["sharedContextRefs"];
   },
 ): TurnInputIntentMetadata {
@@ -52,6 +55,7 @@ export function inputIntentMetadata(
     ...(options.modelSelection ? { modelSelection: options.modelSelection } : {}),
     ...(options.mode ? { mode: options.mode } : {}),
     ...(options.planEnabled !== undefined ? { planEnabled: options.planEnabled } : {}),
+    ...(options.speedStack ? { speedStack: options.speedStack } : {}),
     admissionSeq: admission.admissionSeq,
     admittedAt: admission.admittedAt,
     requestedDelivery: options.requestedDelivery,
@@ -86,6 +90,7 @@ export function inputIntentMetadataFromCanonical(
     ...(canonical.modelSelection ? { modelSelection: canonical.modelSelection } : {}),
     ...(canonical.mode ? { mode: canonical.mode } : {}),
     ...(canonical.planEnabled !== undefined ? { planEnabled: canonical.planEnabled } : {}),
+    ...(canonical.speedStack ? { speedStack: canonical.speedStack } : {}),
     admissionSeq: admission.admissionSeq,
     admittedAt: admission.admittedAt,
     requestedDelivery: canonical.requestedDelivery ?? "startNow",
@@ -119,6 +124,7 @@ export function inputIntentMetadataFromQueueItem(
     ...(item.modelSelection ? { modelSelection: item.modelSelection } : {}),
     ...(item.mode ? { mode: item.mode } : {}),
     ...(item.planEnabled !== undefined ? { planEnabled: item.planEnabled } : {}),
+    ...(item.speedStack ? { speedStack: item.speedStack } : {}),
     admissionSeq: item.order.admissionSeq,
     admittedAt: item.admittedAt,
     requestedDelivery: item.delivery.requested,

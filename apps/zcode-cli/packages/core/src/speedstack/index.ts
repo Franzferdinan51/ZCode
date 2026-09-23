@@ -5,13 +5,19 @@
 export {
   DEFAULT_EFFORT_TIER,
   EFFORT_TIERS,
+  THINKING_MODES,
   effortTierToModelOptions,
+  findThinkingOffLevel,
   normalizeSpeedStackSessionConfig,
   parseEffortTier,
+  parseThinkingMode,
   resolveEffectiveEffortTier,
+  resolveThinkingTier,
   type EffortTier,
   type EffortTierModel,
+  type ResolvedThinking,
   type SpeedStackSessionConfig,
+  type ThinkingMode,
 } from "./effort-tiers.js";
 export {
   PLAN_ARTIFACT_FILENAME,
@@ -51,6 +57,8 @@ export {
   isSystemOneDisabled,
   resolveEffortTierAndOptions,
   resolveMcpAttachPolicy,
+  resolveSystemOneModelTarget,
+  type EffortResolution,
   type McpAttachPolicy,
   type SystemOneRouteDecision,
   type SystemOneRouteHolder,

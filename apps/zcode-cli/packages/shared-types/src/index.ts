@@ -35,8 +35,12 @@ export type GlobalOptions = {
   json: boolean;
   locale?: GlobalLocale;
   memoryBench?: boolean;
+  // 3.24.0: --model auto enables SystemOne per-task model routing.
+  model?: string;
   noColor: boolean;
   outputFormat?: GlobalOutputFormat;
+  // 3.24.0: --thinking off/auto/low/medium/high/xhigh/ultra.
+  thinking?: string;
   verbose: boolean;
 };
 

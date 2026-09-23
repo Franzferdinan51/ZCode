@@ -4309,6 +4309,7 @@ const zhCN: Record<string, string> = {
   "chat.toolbar.thoughtLevel.value.xhigh": "极高",
   "chat.toolbar.thoughtLevel.value.max": "最高",
   "chat.toolbar.thoughtLevel.value.ultra": "极致",
+  "chat.toolbar.thoughtLevel.value.auto": "自动",
   "chat.longRunning.expand": "展开长时间运行面板",
   "chat.longRunning.collapse": "收起长时间运行面板",
   "chat.longRunning.elapsedSeconds": "已运行 {seconds} 秒",

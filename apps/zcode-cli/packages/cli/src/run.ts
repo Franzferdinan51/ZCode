@@ -94,6 +94,8 @@ const globalOptions = (
   browserUse: GlobalOptions["browserUse"],
   browserExecutable: GlobalOptions["browserExecutable"],
   outputFormat: GlobalOptions["outputFormat"],
+  model: GlobalOptions["model"],
+  thinking: GlobalOptions["thinking"],
 ): GlobalOptions => {
   return {
     browserExecutable,
@@ -103,8 +105,10 @@ const globalOptions = (
     json: values.json === true,
     locale,
     ...(values["memory-bench"] === true ? { memoryBench: true } : {}),
+    ...(model ? { model } : {}),
     noColor: values["no-color"] === true,
     ...(outputFormat ? { outputFormat } : {}),
+    ...(thinking ? { thinking } : {}),
     verbose: values.verbose === true,
   };
 };
@@ -135,6 +139,26 @@ const normalizePromptMode = (value: string | undefined): CliPermissionMode | und
   const mode = value.toLowerCase();
   if (mode === "build" || mode === "plan" || mode === "edit" || mode === "yolo") return mode;
   throw new Error(`Unsupported --mode value: ${value}. Supported modes: build, edit, plan, yolo.`);
+};
+
+// 3.24.0: --model auto enables SystemOne per-task model routing.
+const normalizeCliModel = (value: string | undefined): GlobalOptions["model"] => {
+  if (value === undefined) return undefined;
+  if (value.toLowerCase() === "auto") return "auto";
+  throw new Error(
+    `Unsupported --model value: ${value}. Only "auto" is supported (SystemOne model routing).`,
+  );
+};
+
+// 3.24.0: --thinking off/auto/low/medium/high/xhigh/ultra.
+const CLI_THINKING_MODES = ["off", "auto", "low", "medium", "high", "xhigh", "ultra"] as const;
+const normalizeCliThinking = (value: string | undefined): GlobalOptions["thinking"] => {
+  if (value === undefined) return undefined;
+  const mode = value.toLowerCase();
+  if ((CLI_THINKING_MODES as readonly string[]).includes(mode)) return mode;
+  throw new Error(
+    `Unsupported --thinking value: ${value}. Supported: ${CLI_THINKING_MODES.join(", ")}.`,
+  );
 };
 
 const normalizeBrowserUse = (value: string | undefined): GlobalOptions["browserUse"] => {
@@ -380,6 +404,22 @@ export const run = async (ctx: RunContext, deps: RunDependencies = {}): Promise<
     ctx.stderr.write(`${message}\n`);
     return 1;
   }
+  let cliModel: GlobalOptions["model"];
+  try {
+    cliModel = normalizeCliModel(parsed.values.model as string | undefined);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    ctx.stderr.write(`${message}\n`);
+    return 1;
+  }
+  let cliThinking: GlobalOptions["thinking"];
+  try {
+    cliThinking = normalizeCliThinking(parsed.values.thinking as string | undefined);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    ctx.stderr.write(`${message}\n`);
+    return 1;
+  }
   const options = globalOptions(
     parsed.values,
     locale,
@@ -387,6 +427,8 @@ export const run = async (ctx: RunContext, deps: RunDependencies = {}): Promise<
     browserUse,
     browserExecutable,
     outputFormat,
+    cliModel,
+    cliThinking,
   );
   const forceMcs = parsed.values["force-mcs"] === true;
   let targetRequest: CliTargetRequest | undefined;

@@ -3,9 +3,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   effortTierToModelOptions,
+  findThinkingOffLevel,
   normalizeSpeedStackSessionConfig,
   parseEffortTier,
+  parseThinkingMode,
   resolveEffectiveEffortTier,
+  resolveThinkingTier,
 } from "./effort-tiers.ts";
 
 const MODEL = {
@@ -15,17 +18,27 @@ const MODEL = {
   },
 };
 
-test("parseEffortTier accepts low/medium/high case-insensitively", () => {
+test("parseEffortTier accepts all five tiers case-insensitively", () => {
   assert.equal(parseEffortTier("low"), "low");
   assert.equal(parseEffortTier("MEDIUM"), "medium");
   assert.equal(parseEffortTier(" High "), "high");
+  assert.equal(parseEffortTier("XHigh"), "xhigh");
+  assert.equal(parseEffortTier("ULTRA"), "ultra");
 });
 
 test("parseEffortTier fails open to undefined", () => {
-  assert.equal(parseEffortTier("ultra"), undefined);
+  assert.equal(parseEffortTier("bogus"), undefined);
   assert.equal(parseEffortTier(""), undefined);
   assert.equal(parseEffortTier(undefined), undefined);
   assert.equal(parseEffortTier(42), undefined);
+});
+
+test("parseThinkingMode accepts auto/off/tiers case-insensitively", () => {
+  assert.equal(parseThinkingMode("auto"), "auto");
+  assert.equal(parseThinkingMode("OFF"), "off");
+  assert.equal(parseThinkingMode("Xhigh"), "xhigh");
+  assert.equal(parseThinkingMode("bogus"), undefined);
+  assert.equal(parseThinkingMode(undefined), undefined);
 });
 
 test("effortTierToModelOptions maps tiers onto the model's own specs", () => {
@@ -41,6 +54,24 @@ test("effortTierToModelOptions maps tiers onto the model's own specs", () => {
     reasoningLevel: "high",
     maxOutputTokens: 32_000,
   });
+});
+
+test("effortTierToModelOptions budgets: high 32k, xhigh 64k, ultra model max", () => {
+  const big = {
+    optionSpecs: {
+      reasoningLevel: { values: ["a", "b", "c", "d", "e"] },
+      maxOutputTokens: { max: 128_000 },
+    },
+  };
+  assert.equal(effortTierToModelOptions(big, "high").maxOutputTokens, 32_000);
+  assert.equal(effortTierToModelOptions(big, "xhigh").maxOutputTokens, 64_000);
+  assert.equal(effortTierToModelOptions(big, "ultra").maxOutputTokens, 128_000);
+  // xhigh spreads to a distinct upper-half level on 5-level models.
+  assert.equal(effortTierToModelOptions(big, "low").reasoningLevel, "a");
+  assert.equal(effortTierToModelOptions(big, "medium").reasoningLevel, "c");
+  assert.equal(effortTierToModelOptions(big, "high").reasoningLevel, "e");
+  assert.equal(effortTierToModelOptions(big, "xhigh").reasoningLevel, "d");
+  assert.equal(effortTierToModelOptions(big, "ultra").reasoningLevel, "e");
 });
 
 test("effortTierToModelOptions respects a smaller model max", () => {
@@ -66,14 +97,54 @@ test("resolveEffectiveEffortTier prefers explicit config over route hint", () =>
 test("normalizeSpeedStackSessionConfig keeps only valid fields", () => {
   const config = normalizeSpeedStackSessionConfig({
     effortTier: "HIGH",
+    modelRouting: true,
+    thinkingMode: "Auto",
     planThenExecute: true,
     mcpServerAllowlist: ["fs", "", 42],
     unknown: "dropped",
   });
   assert.deepEqual(config, {
     effortTier: "high",
+    modelRouting: true,
+    thinkingMode: "auto",
     planThenExecute: true,
     mcpServerAllowlist: ["fs"],
   });
   assert.deepEqual(normalizeSpeedStackSessionConfig(null), {});
+  // Invalid thinking mode / non-true modelRouting are dropped (fail-open).
+  assert.deepEqual(
+    normalizeSpeedStackSessionConfig({ thinkingMode: "bogus", modelRouting: "yes" }),
+    {},
+  );
+});
+
+test("resolveThinkingTier precedence: off > pinned tier > explicit > route hint", () => {
+  assert.deepEqual(
+    resolveThinkingTier({ thinkingMode: "off", explicitTier: "ultra", routeHint: "low" }),
+    { kind: "off" },
+  );
+  assert.deepEqual(
+    resolveThinkingTier({ thinkingMode: "high", explicitTier: "ultra", routeHint: "low" }),
+    { kind: "tier", tier: "high" },
+  );
+  assert.deepEqual(
+    resolveThinkingTier({ thinkingMode: "auto", explicitTier: "ultra", routeHint: "low" }),
+    { kind: "tier", tier: "ultra" },
+  );
+  assert.deepEqual(
+    resolveThinkingTier({ thinkingMode: "auto", routeHint: "xhigh" }),
+    { kind: "tier", tier: "xhigh" },
+  );
+  assert.equal(
+    resolveThinkingTier({ thinkingMode: "auto", routeHint: undefined }),
+    undefined,
+  );
+  assert.equal(resolveThinkingTier({}), undefined);
+});
+
+test("findThinkingOffLevel detects off-like values case-insensitively", () => {
+  assert.equal(findThinkingOffLevel(["off", "low", "high"]), "off");
+  assert.equal(findThinkingOffLevel(["Disabled", "low"]), "Disabled");
+  assert.equal(findThinkingOffLevel(["no_think", "low"]), "no_think");
+  assert.equal(findThinkingOffLevel(["low", "high"]), undefined);
 });

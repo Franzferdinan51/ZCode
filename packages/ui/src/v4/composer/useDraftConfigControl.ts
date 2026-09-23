@@ -15,6 +15,8 @@ import type {
   ZCodeSlashCommand,
 } from "@zcode/shared";
 import type { SessionConfigState } from "@zcode/shared/zcode-protocol-v4";
+import type { SpeedStackWireConfig } from "@zcode/shared/speedstack-wire";
+import { isSystemOneThinkingMode } from "@/chat-input-toolbar/thoughtLevelOptions.js";
 import type { IModelSelectionService } from "@zcode/services";
 import { completeNewModelSelection } from "@zcode/provider";
 import {
@@ -98,6 +100,7 @@ interface DraftConfigControl {
   ) => () => void;
   handleDraftSelectModel: (modelProvider: string, model: string) => void;
   handleDraftSelectThought: (thought: string) => void;
+  handleDraftSelectModelRouting: (enabled: boolean) => void;
   handleDraftSwitchMode: (mode: string) => void;
 }
 
@@ -224,7 +227,10 @@ export function useDraftConfigControl(params: {
         modelSelection: selection,
         provider: selection?.providerId ?? "",
         model: selection?.modelId ?? "",
-        thought: selection?.options?.reasoningLevel ?? "",
+        // The thought control shows the SystemOne mode when set; the frozen
+        // selection keeps a provider-valid reasoningLevel underneath.
+        thought: next.speedStack?.thinkingMode ?? selection?.options?.reasoningLevel ?? "",
+        ...(next.speedStack ? { speedStack: next.speedStack } : {}),
       };
       setStoredState(nextState);
       persistV4ComposerDraft(workspacePath, workspaceIdentity, scopeId, next);
@@ -256,6 +262,7 @@ export function useDraftConfigControl(params: {
         ...current,
         mode: mode.success ? mode.data : current.mode,
         modelSelection: next.modelSelection,
+        ...(next.speedStack !== undefined ? { speedStack: next.speedStack } : {}),
         // 用户已经显式改选，不能再由导入时等待的默认初始化覆盖。
         ...(current.initializeFromNewTask
           ? { mode: mode.success ? mode.data : "build", initializeFromNewTask: undefined }
@@ -470,11 +477,28 @@ export function useDraftConfigControl(params: {
 
   const handleDraftSelectThought = useCallback(
     (thought: string) => {
+      const mode = thought.trim();
       updateDraftConfig((current) => {
         const providerId = current.modelSelection?.providerId ?? current.provider?.trim();
         const modelId = current.modelSelection?.modelId ?? current.model?.trim();
-        if (!providerId || !modelId) return { ...current, thought };
-        const reasoningLevel = thought.trim();
+        const speedStack: SpeedStackWireConfig = {
+          ...current.speedStack,
+          ...(isSystemOneThinkingMode(mode) ? { thinkingMode: mode } : {}),
+        };
+        if (!providerId || !modelId) return { ...current, thought: mode, speedStack };
+        // The frozen selection must keep a provider-valid reasoningLevel:
+        // use the mode itself when the provider declares it, otherwise keep
+        // the current level (Z1 applies the tier per task regardless).
+        const provider = modelSelectionView?.providers.find(
+          (candidate) => candidate.providerId === providerId,
+        );
+        const validLevels =
+          provider?.models.find((candidate) => candidate.modelId === modelId)?.config
+            .optionSpecs.reasoningLevel?.values ?? [];
+        const reasoningLevel =
+          validLevels.includes(mode) && mode
+            ? mode
+            : (current.modelSelection?.options?.reasoningLevel ?? validLevels[0] ?? "");
         return {
           ...current,
           modelSelection: {
@@ -489,9 +513,25 @@ export function useDraftConfigControl(params: {
                 }
               : {}),
           },
-          thought,
+          thought: mode,
+          speedStack,
         };
       });
+    },
+    [updateDraftConfig, modelSelectionView],
+  );
+
+  /**
+   * "Auto (SystemOne)" model routing toggle. The pinned model stays as the
+   * fallback; modelRouting=true lets the Z0 retarget swap it per task.
+   * Defaults unchanged: absent/false = today's behavior.
+   */
+  const handleDraftSelectModelRouting = useCallback(
+    (enabled: boolean) => {
+      updateDraftConfig((current) => ({
+        ...current,
+        speedStack: { ...current.speedStack, modelRouting: enabled },
+      }));
     },
     [updateDraftConfig],
   );
@@ -531,6 +571,7 @@ export function useDraftConfigControl(params: {
     captureAcceptedModelSelection,
     handleDraftSelectModel,
     handleDraftSelectThought,
+    handleDraftSelectModelRouting,
     handleDraftSwitchMode,
   };
 }

@@ -72,6 +72,7 @@ export function createInitialConversationSnapshot(
       mode: "build",
     },
     modelTransition: null,
+    systemOneLastRouting: null,
     usage: {
       contextWindow: null,
       cumulative: {

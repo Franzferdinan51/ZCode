@@ -486,6 +486,12 @@ export interface AgentRuntime {
     previousModelSelection?: ModelSelection | null;
     origin?: ModelSelectionOrigin;
     supportedThoughtLevels?: readonly string[];
+    systemOneRouting?: {
+      tier: string;
+      effort: string;
+      confidence: number;
+      retargeted: boolean;
+    };
     traceContext?: TraceContext;
   }): Promise<void>;
   /** v4 switchCollaborationMode：协作模式切换后补发 SessionModeChanged（config.mode 投影）。 */

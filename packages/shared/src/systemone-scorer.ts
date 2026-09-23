@@ -281,9 +281,15 @@ export interface MlRouteServiceResponse {
 }
 
 /** Per-task reasoning effort tier a route backend may hint at. */
-export type SystemOneRouteEffort = "low" | "medium" | "high";
+export type SystemOneRouteEffort = "low" | "medium" | "high" | "xhigh" | "ultra";
 
-const SYSTEMONE_ROUTE_EFFORTS: readonly string[] = ["low", "medium", "high"];
+const SYSTEMONE_ROUTE_EFFORTS: readonly string[] = [
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "ultra",
+];
 
 /**
  * Fail-open extraction of an optional `effort` hint from a SystemOne-style

@@ -228,6 +228,12 @@ export interface AgentRuntimeCoreMethods {
     previousModelSelection?: ModelSelection | null;
     origin?: ModelSelectionOrigin;
     supportedThoughtLevels?: readonly string[];
+    systemOneRouting?: {
+      tier: string;
+      effort: string;
+      confidence: number;
+      retargeted: boolean;
+    };
     traceContext: TraceContext;
   }): Promise<void>;
   emitModeChanged(options: {

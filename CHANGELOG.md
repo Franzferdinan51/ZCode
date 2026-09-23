@@ -1,5 +1,22 @@
 # Changelog
 
+## 3.24.0 (2026-09-23)
+
+### Features
+
+* SystemOne speed-stack UI + routing transparency
+  * Desktop model picker: "Auto (SystemOne)" top entry — per-task model routing toggle; the pinned model stays as fallback (no fake provider/model)
+  * Thought control: seven SystemOne modes (Off/Low/Medium/High/XHigh/Ultra/Auto), independent of provider reasoning levels; stored as speedStack.thinkingMode, frozen submission keeps a provider-valid reasoningLevel
+  * Per-response routing chip (⚡ model · effort) from the v4 snapshot's systemOneLastRouting; pinned-model turns now emit routing facts too (effort-only routing)
+  * Draft persistence for speedStack knobs (modelRouting + thinkingMode); defaults unchanged, no silent flips
+* Vendored SystemOne shim in-repo (hermetic releases)
+  * scripts/zcode-distribution/systemone-shim-files/systemone/ — shim.py (Windows self-daemonization), api.py, calibration.py (ultra-trivial Q&A), model_registry.json
+  * Builder defaults to the vendored copy; ZCODE_SYSTEMONE_SRC still overrides for dev
+* Windows lifecycle: CLI spawns the bundled shim with --daemonize (escapes sshd KILL_ON_JOB_CLOSE); fail-open everywhere
+* Effort tiers: low=4k / medium=12k / high=32k / xhigh=64k / ultra=model max; Z1 override maps applied tier to model levels per task
+* CLI: --model auto, --thinking off|auto|low|medium|high|xhigh|ultra
+
+
 ## 3.23.0 (2026-09-23)
 
 ### Features

@@ -8,9 +8,10 @@
 // (`python3.11 -m systemone.shim --port 8765`) when nothing answers on
 // 127.0.0.1:8765.
 //
-// Source resolution: ZCODE_SYSTEMONE_SRC env, else the default checkout
-// path on Ryan's Mac. A missing source is a warning, not a build failure —
-// the release still works, routing just stays fail-open.
+// Source resolution: ZCODE_SYSTEMONE_SRC env, else the vendored in-repo
+// copy (systemone-shim-files/systemone). A missing source is a warning,
+// not a build failure — the release still works, routing just stays
+// fail-open.
 
 import { cp, mkdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
@@ -19,7 +20,10 @@ import { fileURLToPath } from "node:url";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const bundledDocsDir = join(scriptDir, "systemone-shim-files");
 
-const DEFAULT_SOURCE_DIR = "/Users/duckets/systemone-release/systemone";
+// 3.24.0: the SystemOne shim is vendored in-repo
+// (systemone-shim-files/systemone/) so releases are hermetic — no dependency
+// on a Mac-local checkout. ZCODE_SYSTEMONE_SRC still overrides for dev.
+const DEFAULT_SOURCE_DIR = join(bundledDocsDir, "systemone");
 
 // The shim's runtime closure: shim.py imports .api, api.py imports
 // .calibration. Everything else in the checkout (tune/distill/bench,

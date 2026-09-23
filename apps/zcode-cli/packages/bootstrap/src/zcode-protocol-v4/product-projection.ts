@@ -4417,7 +4417,26 @@ export class ProductProjection {
             to: { provider, model },
           }
         : undefined;
-    if (!configChanged && !contextWindowChanged && modelTransition === undefined) {
+    // SystemOne: last turn's routing facts for the per-response chip.
+    // Emitted on every routed turn (even when the model did not change).
+    const systemOneLastRouting = payload.systemOneRouting
+      ? {
+          tier: payload.systemOneRouting.tier,
+          effort: payload.systemOneRouting.effort,
+          confidence: payload.systemOneRouting.confidence,
+          modelId: model,
+          retargeted:
+            payload.previousModelSelection != null &&
+            (payload.previousModelSelection.providerId !== provider ||
+              payload.previousModelSelection.modelId !== model),
+        }
+      : undefined;
+    if (
+      !configChanged &&
+      !contextWindowChanged &&
+      modelTransition === undefined &&
+      systemOneLastRouting === undefined
+    ) {
       return [];
     }
     return [
@@ -4431,6 +4450,8 @@ export class ProductProjection {
           // renderer 无法安全地区分自动恢复和显式/历史切换。保留事件 ID 与起止身份，
           // 具体 toast 仍只由客户端在实时 online delivery 边界触发。
           ...(modelTransition ? { modelTransition } : {}),
+          // SystemOne per-response chip facts (additive; old clients strip).
+          ...(systemOneLastRouting ? { systemOneLastRouting } : {}),
           ...(contextWindowChanged
             ? {
                 usage: {

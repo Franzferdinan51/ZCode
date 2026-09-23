@@ -261,6 +261,9 @@ async function sendText(
         : {}),
       attachmentRefs: payload.attachments,
       sharedContextRefs: payload.context_refs,
+      // Speed-stack routing knobs (3.24.0): carried into the turn intent's
+      // speedStack; runtime merges them into per-turn config. Absent = 3.23 behavior.
+      ...(payload.speedStack ? { speedStack: payload.speedStack } : {}),
     });
     started = await startPromptTurn(host, record, {
       content: payload.text,

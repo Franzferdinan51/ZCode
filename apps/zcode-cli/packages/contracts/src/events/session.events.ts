@@ -687,6 +687,17 @@ export interface ModelSelectedPayload {
   supportedThoughtLevels?: string[];
   /** 当前 selection 在 runtime 实际应用的上下文窗口；null 表示显式清除，字段缺失兼容旧事件。 */
   contextWindow?: number | null;
+  /**
+   * SystemOne route decision applied this turn. Present when a route decision
+   * was made, even if the model did not change (effort-only routing).
+   * Feeds the v4 snapshot's systemOneLastRouting for the per-response chip.
+   */
+  systemOneRouting?: {
+    tier: string;
+    effort: string;
+    confidence: number;
+    retargeted: boolean;
+  };
 }
 
 export type ModelStreamingKind =

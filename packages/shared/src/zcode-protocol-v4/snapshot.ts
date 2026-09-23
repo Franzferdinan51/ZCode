@@ -466,6 +466,19 @@ export const workspaceHookAdmissionStateSchema = z.object({
 });
 export type WorkspaceHookAdmissionSnapshotState = z.infer<typeof workspaceHookAdmissionStateSchema>;
 
+/**
+ * SystemOne per-turn routing facts for the per-response chip.
+ * Additive: parsed from new snapshots only; absent on old ones.
+ */
+export const systemOneRoutingInfoSchema = z.object({
+  tier: z.string().min(1).max(32),
+  effort: z.string().min(1).max(16),
+  confidence: z.number().min(0).max(1),
+  modelId: z.string().min(1).max(160).optional(),
+  retargeted: z.boolean(),
+});
+export type SystemOneRoutingInfo = z.infer<typeof systemOneRoutingInfoSchema>;
+
 export const conversationSnapshotSchema = z.object({
   protocolVersion: z.literal(1),
   sessionId: z.string(),
@@ -486,6 +499,9 @@ export const conversationSnapshotSchema = z.object({
   config: sessionConfigStateSchema,
   // 持久化稳定事实供 live 客户端识别一次性提示；旧快照缺字段时不触发。
   modelTransition: sessionModelTransitionSchema.nullable().default(null),
+  // SystemOne: last turn's routing facts for the per-response chip.
+  // Additive: old snapshots/clients without it parse as null (no chip).
+  systemOneLastRouting: systemOneRoutingInfoSchema.nullable().default(null),
   usage: sessionUsageStateSchema,
   queue: queueStateSchema,
   pendingInteractions: z.array(pendingInteractionSchema),

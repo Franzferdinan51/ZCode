@@ -2,17 +2,25 @@ import { resolveExecutionState, type ModelSelection } from "@zcode/shared";
 import { submissionModeSchema, type SubmissionMode } from "@zcode/shared/zcode-protocol-v4";
 import type { ModelSelectionView } from "@zcode/services";
 import { validateModelSelectionOptions } from "@zcode/provider";
+import type { SpeedStackWireConfig } from "@zcode/shared/speedstack-wire";
 
 export interface ComposerSubmissionConfig {
   modelSelection: ModelSelection;
   mode: SubmissionMode;
   planEnabled: boolean;
+  /** SystemOne knobs (modelRouting + thinkingMode); absent = defaults. */
+  speedStack?: SpeedStackWireConfig;
 }
 
 /** 在点击提交的瞬间，把 Composer 意图冻结成本次 Submission 的执行配置。 */
 export function createComposerSubmissionConfig(
   composer:
-    | { mode?: string; planEnabled?: boolean; modelSelection?: ModelSelection }
+    | {
+        mode?: string;
+        planEnabled?: boolean;
+        modelSelection?: ModelSelection;
+        speedStack?: SpeedStackWireConfig;
+      }
     | null
     | undefined,
   view: ModelSelectionView | null,
@@ -40,5 +48,6 @@ export function createComposerSubmissionConfig(
       modelId: selection.modelId,
       options: Object.freeze({ reasoningLevel: selection.options!.reasoningLevel! }),
     }),
+    ...(composer.speedStack ? { speedStack: Object.freeze({ ...composer.speedStack }) } : {}),
   });
 }

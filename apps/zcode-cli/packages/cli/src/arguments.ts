@@ -31,6 +31,15 @@ export const parseGlobalArgs = (argv: string[]) =>
         short: "p",
         type: "string",
       },
+      // 3.24.0: --model auto = SystemOne model routing per task; any other
+      // value is rejected in run.ts (session model selection stays the default).
+      model: {
+        type: "string",
+      },
+      // 3.24.0: thinking effort for the run — off/auto/low/medium/high/xhigh/ultra.
+      thinking: {
+        type: "string",
+      },
       "memory-bench": {
         type: "boolean",
       },

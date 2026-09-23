@@ -9,7 +9,9 @@
 // (`<release>/systemone`, the `systemone` Python package) as a detached
 // background process:
 //
-//   python3.11 -m systemone.shim --port 8765
+//   python3.11 -m systemone.shim --port 8765 [--daemonize on Windows]
+// (+ --daemonize on win32: the shim self-detaches from sshd's
+// KILL_ON_JOB_CLOSE job object; see systemone/shim.py)
 //
 // A shim already listening on :8765 (e.g. a manually managed one) is
 // used as-is — never duplicated.
@@ -290,7 +292,18 @@ async function spawnShim(det: {
   try {
     const child = spawn(
       python,
-      ["-m", "systemone.shim", "--port", String(SYSTEMONE_SHIM_PORT)],
+      [
+        "-m",
+        "systemone.shim",
+        "--port",
+        String(SYSTEMONE_SHIM_PORT),
+        // Windows: sshd runs the session in a KILL_ON_JOB_CLOSE job object
+        // that Node's detached:true cannot escape (Node can't set creation
+        // flags). The shim re-spawns itself detached
+        // (CREATE_BREAKAWAY_FROM_JOB | DETACHED_PROCESS) so it survives the
+        // SSH session close. No-op on other platforms; fail-open everywhere.
+        ...(process.platform === "win32" ? ["--daemonize"] : []),
+      ],
       {
         // `-m systemone.shim` needs the package's parent dir on sys.path;
         // Python puts the cwd there for -m invocations.

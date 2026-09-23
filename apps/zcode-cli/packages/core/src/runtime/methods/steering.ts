@@ -1078,6 +1078,12 @@ export async function emitModelSelected(
     previousModelSelection?: ModelSelection | null;
     origin?: ModelSelectionOrigin;
     supportedThoughtLevels?: readonly string[];
+    systemOneRouting?: {
+      tier: string;
+      effort: string;
+      confidence: number;
+      retargeted: boolean;
+    };
     traceContext: TraceContext;
   },
 ): Promise<void> {
@@ -1104,6 +1110,9 @@ export async function emitModelSelected(
       ...(options.supportedThoughtLevels
         ? { supportedThoughtLevels: [...options.supportedThoughtLevels] }
         : {}),
+      // SystemOne route decision applied this turn (even when the model did
+      // not change): feeds the v4 per-response routing chip.
+      ...(options.systemOneRouting ? { systemOneRouting: options.systemOneRouting } : {}),
     },
     { traceId: options.traceContext.traceId },
   );

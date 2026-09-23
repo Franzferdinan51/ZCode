@@ -21,6 +21,16 @@ export interface ModelProviderGroupLabelOptions {
   teamPlanFallbackLabel?: string;
 }
 
+/**
+ * Sentinel value for the "Auto (SystemOne)" model entry. Not a real
+ * provider/model: selecting it toggles speedStack.modelRouting while the
+ * pinned model stays as the fallback. The toolbar intercepts this value
+ * before the normal decode path.
+ */
+export const SYSTEMONE_AUTO_MODEL_VALUE = "__systemone_auto__";
+
+export const SYSTEMONE_AUTO_MODEL_LABEL = "Auto (SystemOne)";
+
 function supportsRegistryApiFormat(
   selectedProvider: ZCodeProvider,
   apiFormat: string | null | undefined,
@@ -35,7 +45,18 @@ export function buildRegistryModelSelectGroups(
   view: ModelSelectionView,
   labels: ModelProviderGroupLabelOptions = {},
 ): ModelSelectGroup[] {
-  return view.providers.flatMap((provider) => {
+  const autoGroup: ModelSelectGroup = {
+    key: "systemone:auto",
+    label: SYSTEMONE_AUTO_MODEL_LABEL,
+    items: [
+      {
+        key: "systemone:auto:route",
+        value: SYSTEMONE_AUTO_MODEL_VALUE,
+        name: SYSTEMONE_AUTO_MODEL_LABEL,
+      },
+    ],
+  };
+  const providerGroups = view.providers.flatMap((provider) => {
     if (!supportsRegistryApiFormat(selectedProvider, provider.config.api?.type)) {
       return [];
     }
@@ -66,6 +87,7 @@ export function buildRegistryModelSelectGroups(
       },
     ];
   });
+  return [autoGroup, ...providerGroups];
 }
 
 function getRegistryAccountProviderGroupPresentation(

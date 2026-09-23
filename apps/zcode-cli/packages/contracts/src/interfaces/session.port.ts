@@ -278,8 +278,29 @@ export type TurnSteerSource = "plan_approval_feedback" | "workflow_refine_feedba
 export type TurnSteerDeliveryMode = "guide" | "queue";
 
 /** 协议无关的输入 intent metadata；bootstrap v4 在事件边界组装为 ConversationInputIntent。 */
+/**
+ * Speed-stack routing knobs carried by a turn intent (3.24.0). Mirrors the
+ * wire shape in @zcode/shared/speedstack-wire; the core validates strictly
+ * via normalizeSpeedStackSessionConfig. Model routing and thinking mode are
+ * fully independent: neither gates the other.
+ */
+export interface TurnInputSpeedStack {
+  effortTier?: string;
+  modelRouting?: boolean;
+  thinkingMode?: string;
+  planThenExecute?: boolean;
+  mcpServerAllowlist?: string[];
+  mcpToolAllowlist?: string[];
+  mcpPruning?: boolean;
+}
+
 export interface TurnInputIntentMetadata {
   planEnabled?: boolean;
+  /**
+   * Per-submit speed-stack routing choices (desktop composer / CLI flags).
+   * Merged over the runtime's session config for this turn only.
+   */
+  speedStack?: TurnInputSpeedStack;
   sourceCommandId: string;
   queueItemId: string;
   clientId: string;

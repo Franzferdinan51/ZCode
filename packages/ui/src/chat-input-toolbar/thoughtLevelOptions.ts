@@ -37,7 +37,29 @@ const THOUGHT_LEVEL_LABEL_IDS: Record<string, string> = {
   xhigh: "chat.toolbar.thoughtLevel.value.xhigh",
   max: "chat.toolbar.thoughtLevel.value.max",
   ultra: "chat.toolbar.thoughtLevel.value.ultra",
+  auto: "chat.toolbar.thoughtLevel.value.auto",
 };
+
+/**
+ * The seven SystemOne thinking modes shown in the composer thought control.
+ * Independent of the model's provider reasoning levels: the selected mode is
+ * stored as speedStack.thinkingMode and the Z1 override maps the applied tier
+ * to the model's own levels per task.
+ */
+export const SYSTEMONE_THINKING_MODES = [
+  "off",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "ultra",
+  "auto",
+] as const;
+export type SystemOneThinkingMode = (typeof SYSTEMONE_THINKING_MODES)[number];
+
+export function isSystemOneThinkingMode(value: string): value is SystemOneThinkingMode {
+  return (SYSTEMONE_THINKING_MODES as readonly string[]).includes(value);
+}
 
 function normalizeThoughtLevelText(value: string): string {
   return value.trim().toLowerCase();

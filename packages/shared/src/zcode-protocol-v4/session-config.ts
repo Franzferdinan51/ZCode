@@ -1,10 +1,16 @@
 import { z } from "zod";
 import { modelSelectionSchema } from "../model-selection.js";
+import { speedStackWireConfigSchema } from "../speedstack-wire.js";
 
 // ── config──
 export const sessionConfigStateSchema = z.object({
   /** Session 接受并持久化的稀疏选择意图；provider/model/thought 仅为 UI effective 投影。 */
   modelSelection: modelSelectionSchema.optional(),
+  /**
+   * SystemOne speed-stack knobs (modelRouting toggle + thinkingMode).
+   * Additive: absent on old snapshots/clients (defaults unchanged).
+   */
+  speedStack: speedStackWireConfigSchema.optional(),
   provider: z.string(),
   model: z.string(),
   thought: z.string(),

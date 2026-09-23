@@ -24,7 +24,8 @@
     "./workspace-hook-trust-store-file": "./src/workspace-hook-trust-store-file.ts",
     "./harness-drivers": "./src/harness-drivers.ts",
     "./auto-router": "./src/auto-router.ts",
-    "./systemone-scorer": "./src/systemone-scorer.ts"
+    "./systemone-scorer": "./src/systemone-scorer.ts",
+    "./speedstack-wire": "./src/speedstack-wire.ts"
   },
   "scripts": {
     "build": "tsc",

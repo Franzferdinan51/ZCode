@@ -6,12 +6,18 @@
 // (POST http://127.0.0.1:8765/v1/systemone/route), plus the two per-task
 // policies driven by its route decision:
 //
+//   Z0 model routing  - route.model_id -> retarget the session model for
+//                     this task, ONLY when SpeedStackSessionConfig.modelRouting
+//                     is on ("Auto (SystemOne)"). Fully independent of Z1.
 //   Z1 effort wiring  - route.effort -> EffortTier -> ModelOptions
 //                     (reasoningLevel + maxOutputTokens) via
 //                     resolveEffortTierAndOptions / applySystemOneEffortOverride.
+//                     Honors thinkingMode (off/pinned/auto). Fully independent
+//                     of Z0.
 //   Z2 MCP pruning    - resolveMcpAttachPolicy decides whether MCP servers
 //                     attach at all; pruneMcpServerMap / pruneMcpTools apply
 //                     explicit allowlists from SpeedStackSessionConfig.
+//                     Independent of Z0/Z1; kill-switches documented below.
 //
 // Everything here is fail-open: the shim being down, slow, or returning
 // garbage yields `undefined` / "attach everything", i.e. today's behavior.
@@ -20,7 +26,9 @@ import type { Logger, ModelOptions } from "@zcode/contracts";
 import { extractRouteEffortHint } from "@zcode/shared/systemone-scorer";
 import {
   effortTierToModelOptions,
+  findThinkingOffLevel,
   resolveEffectiveEffortTier,
+  resolveThinkingTier,
   type EffortTier,
   type EffortTierModel,
   type SpeedStackSessionConfig,
@@ -67,6 +75,7 @@ export interface SystemOneRouteDecision {
   readonly confidence: number;
   readonly effort?: string;
   readonly taskLabels?: readonly string[];
+  readonly modelId?: string;
 }
 
 /**
@@ -113,8 +122,15 @@ function parseRouteDecision(payload: unknown): SystemOneRouteDecision | undefine
     confidence: number;
     effort?: string;
     taskLabels?: readonly string[];
+    modelId?: string;
   } = { tier, confidence };
   if (typeof record["effort"] === "string") decision.effort = record["effort"];
+  if (
+    typeof record["model_id"] === "string" &&
+    record["model_id"].trim().length > 0
+  ) {
+    decision.modelId = record["model_id"].trim();
+  }
   if (Array.isArray(record["task_labels"])) {
     decision.taskLabels = record["task_labels"].filter(
       (label): label is string => typeof label === "string",
@@ -123,23 +139,78 @@ function parseRouteDecision(payload: unknown): SystemOneRouteDecision | undefine
   return decision;
 }
 
+// -- Z0: model routing -----------------------------------------------
+
+/**
+ * Resolve the model the route wants for this task. Returns a model id only
+ * when model routing is on (SpeedStackSessionConfig.modelRouting) AND the
+ * route named a model AND it differs from the current one. Otherwise
+ * undefined: the pinned model stays. Never throws (fail-open).
+ *
+ * Independence: thinkingMode never gates model routing; modelRouting never
+ * gates the Z1 effort wiring.
+ */
+export function resolveSystemOneModelTarget(input: {
+  route: SystemOneRouteDecision | undefined;
+  modelRouting?: boolean;
+  currentModelId?: string;
+}): string | undefined {
+  try {
+    if (!input.modelRouting) return undefined;
+    const modelId = input.route?.modelId;
+    if (!modelId || modelId.length === 0) return undefined;
+    if (input.currentModelId && modelId === input.currentModelId) return undefined;
+    return modelId;
+  } catch {
+    return undefined;
+  }
+}
+
 // -- Z1: effort wiring ------------------------------------------------
 
 /**
- * Resolve the effective effort tier and its concrete ModelOptions from a
- * route decision + session config. Returns undefined when there is nothing
- * to apply (no route, no usable hint, no explicit tier) — the caller then
- * keeps today's model options untouched.
+ * Outcome of resolving what thinking to apply for one task:
+ * - { kind: "tier", ... } -> bind the tier's reasoningLevel + token budget.
+ * - { kind: "off" }        -> bind the model's own "thinking off" level.
+ * - undefined              -> nothing to apply; keep the model untouched.
+ */
+export type EffortResolution =
+  | {
+      readonly kind: "tier";
+      readonly tier: EffortTier;
+      readonly options: Required<ModelOptions>;
+    }
+  | { readonly kind: "off" };
+
+/**
+ * Resolve the effective thinking for one task and its concrete ModelOptions
+ * from a route decision + session config. Returns undefined when there is
+ * nothing to apply (no route, no usable hint, no explicit tier/mode) — the
+ * caller then keeps today's model options untouched.
+ *
+ * Thinking-mode precedence (see resolveThinkingTier; independent of Z0
+ * model routing): thinkingMode "off" -> off; a pinned tier -> that tier;
+ * legacy config.effortTier -> that tier; thinkingMode "auto"/unset -> the
+ * route's effort hint.
  */
 export function resolveEffortTierAndOptions(input: {
   route: SystemOneRouteDecision | undefined;
   config: SpeedStackSessionConfig | undefined;
   model: EffortTierModel;
-}): { tier: EffortTier; options: Required<ModelOptions> } | undefined {
+}): EffortResolution | undefined {
   const hint = extractRouteEffortHint(input.route);
-  const tier = resolveEffectiveEffortTier(input.config, hint);
-  if (!tier) return undefined;
-  return { tier, options: effortTierToModelOptions(input.model, tier) };
+  const thinking = resolveThinkingTier({
+    thinkingMode: input.config?.thinkingMode,
+    explicitTier: input.config?.effortTier,
+    routeHint: hint,
+  });
+  if (!thinking) return undefined;
+  if (thinking.kind === "off") return { kind: "off" };
+  return {
+    kind: "tier",
+    tier: thinking.tier,
+    options: effortTierToModelOptions(input.model, thinking.tier),
+  };
 }
 
 /** Structural session state needed by the effort override. */
@@ -170,6 +241,20 @@ export function applySystemOneEffortOverride<
       model,
     });
     if (!resolved) return model;
+    if (resolved.kind === "off") {
+      // Thinking off: bind the model's own off level. Fail-open when the
+      // model declares no off-like level (leave today's options untouched).
+      const offLevel = findThinkingOffLevel(
+        model.optionSpecs.reasoningLevel.values,
+      );
+      if (!offLevel) return model;
+      logger?.debug("SystemOne thinking off applied", {
+        event: "systemone.thinking.off",
+        module: "core.speedstack",
+        reasoningLevel: offLevel,
+      });
+      return model.bind({ ...model.options, reasoningLevel: offLevel });
+    }
     logger?.debug("SystemOne effort override applied", {
       effortTier: resolved.tier,
       event: "systemone.effort.applied",
