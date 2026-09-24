@@ -83,6 +83,16 @@ config or env, tunable without a release, and model choice always flows
 from the router, the registry, or explicit user config — no hard-coded
 model IDs.
 
+Jeff-1-backed plan ranking: `plan-execute` asks the shim for N
+candidate plans and posts them to `/v1/systemone/rank-plans`, executing the
+winner. The ranking blends the GLiClass score 50/50 with **Jeff-1**
+([GestaltLabs/Jeff-1](https://huggingface.co/GestaltLabs/Jeff-1) — Apache 2.0,
+LoRA on [Qwen3-4B-Instruct-2507](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507));
+the full ranking lands in run diagnostics. On uncertain routes the shim's
+`jeff1_second_opinion` is advisory-only — and the agent never prunes,
+bumps effort one level, and records why. A down or slow Jeff-1 sidecar fails
+open with no behavior change.
+
 Kill switches (each disables only its own surface; all default on):
 
 - `ZCODE_SYSTEMONE=0` — all SystemOne integration
