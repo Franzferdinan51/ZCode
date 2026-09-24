@@ -40,6 +40,17 @@ Everything below is what this fork changed relative to upstream ZCode. The UI, c
 - The bundled provider config no longer refreshes from the official remote endpoint.
 - Purchase/plan panels remain visible in settings but are inert without an account.
 
+**Meta Model API (Muse) via the official Responses integration**
+
+- The bundled `meta` provider template points at `https://api.meta.ai/v1` and drives
+  Muse Spark over the Responses API (the integration Meta documents for coding
+  agents), not raw chat-completions. That keeps tool calling, streaming, and
+  structured output working, and avoids the HTTP 400s chat-completions returns
+  for reasoning-model params (`stop`, `logit_bias`, `logprobs`).
+- Add the provider from the Meta template and paste a Model API key (created at
+  https://dev.meta.ai/) in provider settings. Muse models are never a default;
+  routing still flows router -> registry/config -> your explicit selection.
+
 **Side-by-side identity (no conflicts with official installs)**
 
 | Surface               | Official                | This fork                           |
