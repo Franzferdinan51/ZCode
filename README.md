@@ -161,6 +161,43 @@ Additional setup and build commands:
 
 The default `bootstrap` skips remote asset preparation and is suitable for local desktop development. Run the corresponding preparation command when working with remote workspaces or validating remote distribution assets.
 
+## Minimum requirements
+
+For running the **released runtime** (the `zcode-<version>.tar.gz`
+tarballs / `~/.zcode-local/runtime/releases/` installs). Dev and
+packaging requirements (Git, Node 24.14.0, pnpm 10.33.2 via mise) are
+under Setup above.
+
+- **Node.js** — >= 24.0.0 (per `package.json` `engines`; verified).
+  The runtime tarball does **not** bundle Node — `bin/zcode.mjs` runs
+  on your system Node, so install Node 24+ first.
+- **OS / CPU** — the runtime is platform-agnostic JavaScript and runs
+  anywhere Node 24 runs: macOS, Windows, Linux (x64 or arm64). No
+  official platform restriction is stated.
+- **Disk** — ~300 MB for the installed runtime (tarball 64 MB,
+  extracted ~283 MB — both measured), plus ~1 GB for the bundled
+  SystemOne shim if you run it locally (torch ~0.6 GB, GLiClass edge
+  checkpoint 256 MB — both measured), plus ~15 GB if you enable the
+  Jeff-1 second head (its model weights in the HuggingFace cache —
+  measured; skip with `SYSTEMONE_JEFF1=0`).
+- **Inference (the real requirement)** — ZCode needs somewhere to run
+  models: LM Studio locally (OpenAI-compatible) or configured API
+  providers. Model requirements are the *model's*, not the tool's: a
+  35B-class local model wants tens of GB of RAM/VRAM — check the model
+  card / LM Studio for the specific model before loading it. Reference
+  setup: Windows 11 PC with 64 GB RAM serving models through LM Studio;
+  Mac mini (M4 Pro, 24 GB) reaching them over LM Link.
+- **SystemOne agent-flow routing (on by default)** — ZCode queries the
+  router at `http://127.0.0.1:8765` (bundled under the release's
+  `systemone/` directory: `pip install -r systemone/requirements.txt`,
+  the GLiClass checkpoint downloads on first start; needs
+  Python >= 3.10). ZCode does **not** auto-start the shim — grok-local
+  does, or start it manually
+  (`python3.11 -m systemone.shim --port 8765`). Routing is advisory and
+  fail-open. Kill switches: `ZCODE_SYSTEMONE=0` (routing off),
+  `ZCODE_SPEEDSTACK_PRUNE=0` (no MCP pruning), `SYSTEMONE_JEFF1=0`
+  (GLiClass only, no Jeff-1 second head).
+
 ## Development and Usage
 
 ### Desktop
