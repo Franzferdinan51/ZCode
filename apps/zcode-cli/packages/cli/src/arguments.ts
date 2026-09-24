@@ -84,6 +84,8 @@ export const parseGlobalArgs = (argv: string[]) =>
         type: "boolean",
       },
       "prepare-storage": { type: "boolean" },
+      "skip-onboarding": { type: "boolean" },
+      yes: { type: "boolean" },
       stdio: {
         type: "boolean",
       },

@@ -19,6 +19,7 @@ Commands:
   commands   List custom slash commands (\`commands list\`)
   doctor     Inspect runtime and packaging assumptions
   logout     Remove locally stored provider credentials
+  onboard    First-run setup wizard: requirements, inference, SystemOne routing
   plugins    Manage plugins and marketplaces (\`plugins list|install|uninstall|enable|disable|update|validate|marketplace ...\`; alias: plugin)
   skills     List local skills (\`skills list\`)
   tui        Open the terminal UI
@@ -48,6 +49,8 @@ Options:
   --json           Print machine-readable JSON where supported
   --no-browser     Print the OAuth URL without opening a browser
   --no-color       Disable ANSI colors
+  --yes              Assume yes: accept all defaults non-interactively
+  --skip-onboarding  Skip the first-run setup wizard when opening the TUI
   --verbose        Print extra diagnostic detail
 
 Slash Commands:

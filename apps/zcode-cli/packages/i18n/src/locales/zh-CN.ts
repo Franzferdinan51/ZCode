@@ -19,6 +19,7 @@ export const zhCN: ZCodeCopy = {
   commands   列出自定义 slash commands（\`commands list\`）
   doctor     检查运行时和打包假设
   logout     删除本地保存的 Provider 凭据
+  onboard    首次运行设置向导：环境检查、推理配置、SystemOne 路由
   plugins    管理插件与市场（\`plugins list|install|uninstall|enable|disable|update|validate|marketplace ...\`；别名 plugin）
   skills     列出本地 skills（\`skills list\`）
   tui        打开终端 UI
@@ -48,6 +49,8 @@ export const zhCN: ZCodeCopy = {
   --json           在支持的命令中输出机器可读 JSON
   --no-browser     不打开浏览器，只打印 OAuth URL
   --no-color       禁用 ANSI 颜色
+  --yes              全部默认：非交互式接受所有默认值
+  --skip-onboarding  打开 TUI 时跳过首次运行设置向导
   --verbose        打印更多诊断信息
 
 Slash Commands:

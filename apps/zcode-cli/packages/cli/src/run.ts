@@ -11,6 +11,7 @@ import {
   shouldLoadCliDotenvForProtocolServer,
 } from "./env.js";
 import { formatCliHelp } from "./help.js";
+import { maybeRunFirstTimeOnboarding, runOnboardCommand } from "./onboard.js";
 import { runHooksCommand } from "./hooks-trust-command.js";
 import { detectCliLocale } from "./locale.js";
 import { loadBootstrapModule } from "./bootstrap-loader.js";
@@ -575,6 +576,10 @@ export const run = async (ctx: RunContext, deps: RunDependencies = {}): Promise<
       );
     case "doctor":
       return runDoctor(ctx, options, workingDirectory);
+    case "onboard":
+      return await runOnboardCommand(ctx, options, parsed.positionals.slice(1), {
+        yes: parsed.values.yes === true,
+      });
     case "logout":
       return await runLogoutCommand(ctx, options, commandDeps);
     case "commands":
@@ -590,7 +595,13 @@ export const run = async (ctx: RunContext, deps: RunDependencies = {}): Promise<
       );
     case "skills":
       return await runSkillsCommand(ctx, options, commandDeps, parsed.positionals.slice(1));
-    case "tui":
+    case "tui": {
+      const firstRunExit = await maybeRunFirstTimeOnboarding(ctx, {
+        argv: ctx.argv,
+        env,
+        stdinIsTTY: ctx.stdin.isTTY === true,
+      });
+      if (firstRunExit !== undefined) return firstRunExit;
       return await runTuiCommand(
         ctx,
         options,
@@ -601,6 +612,7 @@ export const run = async (ctx: RunContext, deps: RunDependencies = {}): Promise<
         toolDisallowlist,
         forceMcs,
       );
+    }
     default:
       ctx.stderr.write(`Unknown command: ${commandName(parsed.positionals)}\n\n`);
       writeHelp(ctx.stderr, options.locale, options.detectedLocale);

@@ -168,6 +168,12 @@ tarballs / `~/.zcode-local/runtime/releases/` installs). Dev and
 packaging requirements (Git, Node 24.14.0, pnpm 10.33.2 via mise) are
 under Setup above.
 
+**First time?** Run `zcode onboard` — the guided first-run wizard checks
+these requirements, probes LM Studio and the SystemOne router, optionally
+stores a Meta API key, and writes your initial config. It also runs
+automatically on first interactive launch of `zcode tui` (skip with
+`--skip-onboarding` or `ZCODE_SKIP_ONBOARDING=1`).
+
 - **Node.js** — >= 24.0.0 (per `package.json` `engines`; verified).
   The runtime tarball does **not** bundle Node — `bin/zcode.mjs` runs
   on your system Node, so install Node 24+ first.
