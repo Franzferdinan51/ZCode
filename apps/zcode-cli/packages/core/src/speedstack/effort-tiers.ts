@@ -158,6 +158,19 @@ export interface SpeedStackSessionConfig {
   thinkingMode?: ThinkingMode;
   /** When true, run plan-then-execute instead of a single reactive loop. */
   planThenExecute?: boolean;
+  /**
+   * Plan pin (Phase 3): when true, plan-then-execute produces exactly one
+   * candidate plan and executes it as-is — the SystemOne rank-plans call
+   * is skipped. Explicit deterministic config; wins over everything.
+   * Env equivalent: ZCODE_PLAN_PIN=1.
+   */
+  planPin?: boolean;
+  /**
+   * Candidate plans (Phase 3): how many candidate plans the planner
+   * produces for rank-plans scoring. Undefined = the default (2) when
+   * unpinned. Env ZCODE_PLAN_CANDIDATES wins over this.
+   */
+  planCandidates?: number;
   /** MCP server allowlist; undefined/empty = attach everything (default). */
   mcpServerAllowlist?: readonly string[];
   /** MCP tool allowlist ("server.tool" or "tool"); undefined/empty = all. */
@@ -188,6 +201,17 @@ export function normalizeSpeedStackSessionConfig(
   if (typeof raw["planThenExecute"] === "boolean") {
     config.planThenExecute = raw["planThenExecute"];
   }
+  if (typeof raw["planPin"] === "boolean") {
+    config.planPin = raw["planPin"];
+  }
+  const planCandidates = raw["planCandidates"];
+  if (
+    typeof planCandidates === "number" &&
+    Number.isInteger(planCandidates) &&
+    planCandidates > 0
+  ) {
+    config.planCandidates = planCandidates;
+  }
   if (Array.isArray(raw["mcpServerAllowlist"])) {
     config.mcpServerAllowlist = raw["mcpServerAllowlist"].filter(
       (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
@@ -216,6 +240,18 @@ export function resolveEffectiveEffortTier(
   routeHint: EffortTier | undefined,
 ): EffortTier | undefined {
   return config?.effortTier ?? routeHint ?? undefined;
+}
+
+/**
+ * Bump an effort tier up one level (low→medium→high→xhigh→ultra). The top
+ * tier stays put (fail-open: never invents a tier above ultra). Used by the
+ * SystemOne "uncertain" rule: an uncertain route raises effort one level
+ * instead of pruning tools.
+ */
+export function bumpEffortTier(tier: EffortTier): EffortTier {
+  const index = EFFORT_TIERS.indexOf(tier);
+  if (index < 0) return DEFAULT_EFFORT_TIER;
+  return EFFORT_TIERS[Math.min(EFFORT_TIERS.length - 1, index + 1)] as EffortTier;
 }
 
 /** Outcome of thinking-mode resolution for one task. */

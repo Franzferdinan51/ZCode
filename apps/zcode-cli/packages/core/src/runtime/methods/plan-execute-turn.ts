@@ -34,6 +34,15 @@ import {
   writePlanArtifact,
 } from "../../speedstack/plan-execute.js";
 import type { PlanExecuteGateDecision } from "../../speedstack/plan-execute-gate.js";
+import {
+  buildPlannerCandidatesPrompt,
+  fetchSystemOnePlanRanking,
+  isPlanPinned,
+  parseCandidatePlans,
+  resolvePlanCandidateCount,
+  selectRankedPlan,
+  type PlanSelection,
+} from "../../speedstack/plan-ranking.js";
 import type { SystemOneRouteDecision } from "../../speedstack/systemone-route.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { commitTurnRequestEntries } from "./turn-output-token-continuation.js";
@@ -89,12 +98,30 @@ export async function runPlanThenExecuteTurn(
   } catch {
     // fail-open: role models are advisory/transparency-only
   }
+  // Phase 3: candidate-plan ranking. Unpinned turns ask the planner for N
+  // candidate plans and score them via the SystemOne rank-plans endpoint;
+  // pinned/deterministic config forces a single plan, executed as-is.
+  let planCandidateCount = 1;
+  let planPinned = true;
+  try {
+    planPinned = isPlanPinned(process.env, this.speedStackConfig);
+    planCandidateCount = resolvePlanCandidateCount(
+      this.speedStackConfig,
+      process.env,
+    );
+  } catch {
+    planPinned = true;
+    planCandidateCount = 1;
+  }
   this.logger?.info("Plan-then-execute started", {
     ...logContext(),
     outcome: "started",
     reason: options.gate.reason,
     plannerModelId: roleModels?.plannerModelId ?? null,
     executorModelId: roleModels?.executorModelId ?? null,
+    planCandidateCount,
+    planPinned,
+    uncertainRoute: options.routeDecision?.uncertain === true,
   });
 
   // -- Phase 1: planner with READ-ONLY tool visibility ------------------
@@ -111,7 +138,9 @@ export async function runPlanThenExecuteTurn(
     commitTurnRequestEntries(this, state.turnRequestState, [
       systemReminderAttachmentEntry(
         "plan_execute_planner",
-        buildPlannerPrompt(options.input),
+        planCandidateCount > 1
+          ? buildPlannerCandidatesPrompt(options.input, planCandidateCount)
+          : buildPlannerPrompt(options.input),
       ),
     ]);
     await runRegularTurnLoop.call(this, state);
@@ -120,7 +149,51 @@ export async function runPlanThenExecuteTurn(
     state.toolDisallowlist = savedDisallowlist;
   }
 
-  const planText = (state.modelResponse ?? "").trim();
+  const plannerText = (state.modelResponse ?? "").trim();
+  // Phase 3: rank candidate plans and execute the winner. Fail-open at
+  // every step: unparseable response, shim down/timeout/old schema, or any
+  // internal error -> the first candidate (today's single plan) executes.
+  let planText = plannerText;
+  let planSelection: PlanSelection | undefined;
+  if (plannerText.length > 0 && planCandidateCount > 1) {
+    try {
+      const candidates = parseCandidatePlans(plannerText);
+      if (candidates.length >= 2) {
+        let ranking;
+        try {
+          ranking = await fetchSystemOnePlanRanking(options.input, candidates);
+        } catch {
+          ranking = undefined;
+        }
+        planSelection = selectRankedPlan(candidates, ranking) ?? undefined;
+        if (planSelection) {
+          planText = planSelection.plan.text;
+        }
+        this.logger?.info("Plan candidates ranked", {
+          ...logContext(),
+          event: "plan_execute.ranked_plans",
+          candidateCount: candidates.length,
+          candidateIds: candidates.map((candidate) => candidate.id),
+          ranking: ranking
+            ? ranking.ranking.map((entry) => ({
+                id: entry.id,
+                score: entry.score,
+                pSuccess: entry.pSuccess ?? null,
+                costPenalty: entry.costPenalty ?? null,
+                estSteps: entry.estSteps ?? null,
+              }))
+            : null,
+          selectedId: planSelection?.plan.id ?? null,
+          selectedIndex: planSelection?.index ?? 0,
+          selectionReason: planSelection?.reason ?? "no-ranking",
+        });
+      }
+    } catch {
+      // Fail-open: keep the raw planner text as the single plan.
+      planText = plannerText;
+      planSelection = undefined;
+    }
+  }
   if (planText.length === 0 || state.speedStackPlannerBudgetExhausted === true) {
     // Fail-open: no usable plan — run the turn as a normal direct
     // execution instead of inventing one.
@@ -168,5 +241,7 @@ export async function runPlanThenExecuteTurn(
     ...logContext(),
     outcome: "completed",
     planPath,
+    planSelectionReason: planSelection?.reason ?? "single-plan",
+    selectedPlanId: planSelection?.plan.id ?? null,
   });
 }

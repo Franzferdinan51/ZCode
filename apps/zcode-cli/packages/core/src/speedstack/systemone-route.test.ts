@@ -18,11 +18,13 @@ import { createServer } from "node:http";
 import { test } from "node:test";
 
 import {
+  adjustEffortForUncertainty,
   applySystemOneEffortOverride,
   fetchSystemOneRouteDecision,
   isSystemOneDisabled,
   resolveEffortTierAndOptions,
   resolveMcpAttachPolicy,
+  resolveSystemOneBehaviorPolicy,
   resolveSystemOneModelTarget,
   routeTierMargin,
   SYSTEMONE_PRUNE_CONFIDENCE_THRESHOLD,
@@ -498,4 +500,180 @@ test("attach policy preserves tierScores/margin on the tool-level policy", () =>
   );
   assert.deepEqual(policy.toolPolicy.tierScores, { economy: 0.1, balanced: 0.7, heavy: 0.2 });
   assert.equal(policy.toolPolicy.margin, 0.7 - 0.2);
+});
+
+// ---------------------------------------------------------------
+// Phase 3: uncertain + ranked_tools decision surfaces
+// ---------------------------------------------------------------
+
+async function fetchFromPayload(payload: unknown) {
+  const server = createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(payload));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    return await fetchSystemOneRouteDecision("do the thing", {
+      endpoint: `http://127.0.0.1:${address.port}/v1/systemone/route`,
+      timeoutMs: 2000,
+    });
+  } finally {
+    server.close();
+  }
+}
+
+test("fetch parses uncertain + ranked_tools from the shim", async () => {
+  const decision = await fetchFromPayload({
+    route: {
+      tier: "balanced",
+      confidence: 0.62,
+      effort: "medium",
+      uncertain: true,
+      ranked_tools: [
+        { id: "browserclaw", kind: "tool", relevance: 0.91 },
+        { id: "weather", kind: "tool", relevance: 0.4 },
+      ],
+    },
+  });
+  assert.ok(decision);
+  assert.equal(decision.uncertain, true);
+  assert.deepEqual(decision.rankedTools, [
+    { id: "browserclaw", kind: "tool", relevance: 0.91 },
+    { id: "weather", kind: "tool", relevance: 0.4 },
+  ]);
+});
+
+test("fetch leaves uncertain/rankedTools undefined on old-schema shims", async () => {
+  const decision = await fetchFromPayload({
+    route: { tier: "balanced", confidence: 0.7, effort: "medium" },
+  });
+  assert.ok(decision);
+  assert.equal(decision.uncertain, undefined);
+  assert.equal(decision.rankedTools, undefined);
+});
+
+test("fetch drops malformed ranked_tools entries but keeps good ones", async () => {
+  const decision = await fetchFromPayload({
+    route: {
+      tier: "balanced",
+      confidence: 0.7,
+      ranked_tools: [
+        { id: "", relevance: 0.9 },
+        { id: "browserclaw", relevance: "high" },
+        { id: "weather", relevance: 0.4 },
+        "nonsense",
+      ],
+    },
+  });
+  assert.ok(decision);
+  assert.deepEqual(decision.rankedTools, [{ id: "weather", relevance: 0.4 }]);
+});
+
+test("MCP attach policy: uncertain route never prunes, even at economy 0.95", () => {
+  const policy = resolveMcpAttachPolicy(
+    { tier: "economy", confidence: 0.95, uncertain: true },
+    undefined,
+    { serverNames: ["filesystem", "memory"] },
+  );
+  assert.equal(policy.attachMcp, true);
+  assert.equal(policy.toolPolicy.mode, "all");
+  assert.ok(policy.reason.includes("uncertain"));
+});
+
+test("MCP attach policy: certain economy 0.95 still prunes (unchanged)", () => {
+  const policy = resolveMcpAttachPolicy(
+    { tier: "economy", confidence: 0.95 },
+    undefined,
+    { serverNames: ["filesystem", "memory"] },
+  );
+  assert.equal(policy.attachMcp, false);
+  assert.equal(policy.toolPolicy.mode, "none");
+});
+
+test("adjustEffortForUncertainty bumps route-driven effort one level", () => {
+  const route: SystemOneRouteDecision = { tier: "balanced", confidence: 0.6, uncertain: true };
+  const bumped = adjustEffortForUncertainty({ kind: "tier", tier: "low" }, route, { thinkingMode: "auto" });
+  assert.equal(bumped.bumped, true);
+  assert.equal(bumped.fromTier, "low");
+  assert.equal(bumped.toTier, "medium");
+  const bumpedHigh = adjustEffortForUncertainty({ kind: "tier", tier: "high" }, route, undefined);
+  assert.equal(bumpedHigh.toTier, "xhigh");
+});
+
+test("adjustEffortForUncertainty never touches explicit pins", () => {
+  const route: SystemOneRouteDecision = { tier: "balanced", confidence: 0.6, uncertain: true };
+  assert.equal(
+    adjustEffortForUncertainty({ kind: "tier", tier: "low" }, route, { thinkingMode: "high" }).bumped,
+    false,
+  );
+  assert.equal(
+    adjustEffortForUncertainty({ kind: "tier", tier: "low" }, route, { effortTier: "low" }).bumped,
+    false,
+  );
+  assert.equal(
+    adjustEffortForUncertainty({ kind: "off" }, route, undefined).bumped,
+    false,
+  );
+  assert.equal(
+    adjustEffortForUncertainty(
+      { kind: "tier", tier: "low" },
+      { tier: "balanced", confidence: 0.6 },
+      undefined,
+    ).bumped,
+    false,
+  );
+  // ultra stays ultra: no phantom bump
+  assert.equal(
+    adjustEffortForUncertainty({ kind: "tier", tier: "ultra" }, route, undefined).bumped,
+    false,
+  );
+});
+
+test("resolveEffortTierAndOptions bumps the tier and marks the bump on uncertain routes", () => {
+  const resolved = resolveEffortTierAndOptions({
+    route: { tier: "balanced", confidence: 0.6, effort: "low", uncertain: true },
+    config: { thinkingMode: "auto" },
+    model: TIER_MODEL,
+  });
+  assert.ok(resolved && resolved.kind === "tier");
+  assert.equal(resolved.tier, "medium");
+  assert.deepEqual(resolved.uncertainBump, { from: "low", to: "medium" });
+});
+
+test("resolveEffortTierAndOptions leaves pinned thinking alone on uncertain routes", () => {
+  const resolved = resolveEffortTierAndOptions({
+    route: { tier: "balanced", confidence: 0.6, effort: "low", uncertain: true },
+    config: { thinkingMode: "low" },
+    model: TIER_MODEL,
+  });
+  assert.ok(resolved && resolved.kind === "tier");
+  assert.equal(resolved.tier, "low");
+  assert.equal(resolved.uncertainBump, undefined);
+});
+
+test("resolveSystemOneBehaviorPolicy applies the uncertain bump to tier, policy, and budgets", () => {
+  const resolution = resolveSystemOneBehaviorPolicy(
+    {
+      speedStackConfig: { thinkingMode: "auto" },
+      systemOneRouteValue: { tier: "balanced", confidence: 0.6, effort: "low", uncertain: true },
+    },
+    {},
+  );
+  assert.equal(resolution.tier, "medium");
+  assert.equal(resolution.policy?.tier, "medium");
+  assert.deepEqual(resolution.uncertainBump, { from: "low", to: "medium" });
+});
+
+test("resolveSystemOneBehaviorPolicy without uncertainty is unchanged", () => {
+  const resolution = resolveSystemOneBehaviorPolicy(
+    {
+      speedStackConfig: { thinkingMode: "auto" },
+      systemOneRouteValue: { tier: "balanced", confidence: 0.6, effort: "low" },
+    },
+    {},
+  );
+  assert.equal(resolution.tier, "low");
+  assert.equal(resolution.uncertainBump, undefined);
 });

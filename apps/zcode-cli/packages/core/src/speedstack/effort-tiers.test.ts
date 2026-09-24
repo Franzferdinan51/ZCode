@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  bumpEffortTier,
   effortTierToModelOptions,
   findThinkingOffLevel,
   normalizeSpeedStackSessionConfig,
@@ -147,4 +148,33 @@ test("findThinkingOffLevel detects off-like values case-insensitively", () => {
   assert.equal(findThinkingOffLevel(["Disabled", "low"]), "Disabled");
   assert.equal(findThinkingOffLevel(["no_think", "low"]), "no_think");
   assert.equal(findThinkingOffLevel(["low", "high"]), undefined);
+});
+
+// ---------------------------------------------------------------
+// Phase 3: uncertain effort bump + plan config surface
+// ---------------------------------------------------------------
+
+test("bumpEffortTier raises one level, ultra stays ultra", () => {
+  assert.equal(bumpEffortTier("low"), "medium");
+  assert.equal(bumpEffortTier("medium"), "high");
+  assert.equal(bumpEffortTier("high"), "xhigh");
+  assert.equal(bumpEffortTier("xhigh"), "ultra");
+  assert.equal(bumpEffortTier("ultra"), "ultra");
+});
+
+test("normalizeSpeedStackSessionConfig keeps planPin/planCandidates", () => {
+  const config = normalizeSpeedStackSessionConfig({
+    planPin: true,
+    planCandidates: 3,
+    thinkingMode: "auto",
+  });
+  assert.equal(config.planPin, true);
+  assert.equal(config.planCandidates, 3);
+  assert.equal(config.thinkingMode, "auto");
+  const invalid = normalizeSpeedStackSessionConfig({
+    planPin: "yes",
+    planCandidates: 0,
+  });
+  assert.equal(invalid.planPin, undefined);
+  assert.equal(invalid.planCandidates, undefined);
 });

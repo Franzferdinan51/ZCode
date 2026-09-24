@@ -25,6 +25,7 @@
 import type { Logger, ModelOptions } from "@zcode/contracts";
 import { extractRouteEffortHint } from "@zcode/shared/systemone-scorer";
 import {
+  bumpEffortTier,
   effortTierToModelOptions,
   findThinkingOffLevel,
   getEffortBehaviorPolicy,
@@ -34,7 +35,9 @@ import {
   type EffortBehaviorPolicy,
   type EffortTier,
   type EffortTierModel,
+  type ResolvedThinking,
   type SpeedStackSessionConfig,
+  type ThinkingMode,
 } from "./effort-tiers.js";
 import type { TurnBudgets } from "./turn-budgets.js";
 import { computeServerShortlist } from "./tool-packs.js";
@@ -82,6 +85,18 @@ export interface SystemOneRouteDecision {
   readonly taskLabels?: readonly string[];
   readonly modelId?: string;
   /**
+   * True when the shim's calibration flagged the route as uncertain
+   * (narrow top-1/top-2 margin). Phase 3 rule: an uncertain route NEVER
+   * prunes tools/MCP servers and bumps effort one level. Absent on older
+   * shims — "not present", never an error.
+   */
+  readonly uncertain?: boolean | undefined;
+  /**
+   * Shim-scored tool/MCP relevance ranking (advisory): entries are
+   * keep-signals only, never prune-signals. Absent/empty on older shims.
+   */
+  readonly rankedTools?: readonly RankedTool[] | undefined;
+  /**
    * Per-tier classification scores, preserved verbatim from the shim's
    * `probabilities` payload when present. Never consumed by current
    * policy thresholds (those stay confidence-gated); carried end-to-end
@@ -89,6 +104,13 @@ export interface SystemOneRouteDecision {
    * them without re-fetching the route.
    */
   readonly tierScores?: Readonly<Record<string, number>>;
+}
+
+/** One entry of the shim's ranked_tools surface (advisory keep-signal). */
+export interface RankedTool {
+  readonly id: string;
+  readonly relevance: number;
+  readonly kind?: string | undefined;
 }
 
 /**
@@ -136,9 +158,33 @@ function parseRouteDecision(payload: unknown): SystemOneRouteDecision | undefine
     effort?: string;
     taskLabels?: readonly string[];
     modelId?: string;
+    uncertain?: boolean;
+    rankedTools?: RankedTool[];
     tierScores?: Readonly<Record<string, number>>;
   } = { tier, confidence };
   if (typeof record["effort"] === "string") decision.effort = record["effort"];
+  if (record["uncertain"] === true) decision.uncertain = true;
+  const rankedTools = record["ranked_tools"];
+  if (Array.isArray(rankedTools)) {
+    const parsed: RankedTool[] = [];
+    for (const item of rankedTools) {
+      if (!item || typeof item !== "object") continue;
+      const entry = item as Record<string, unknown>;
+      const id = entry["id"];
+      const relevance = entry["relevance"];
+      if (typeof id !== "string" || id.trim().length === 0) continue;
+      if (typeof relevance !== "number" || !Number.isFinite(relevance)) {
+        continue;
+      }
+      const kind = entry["kind"];
+      parsed.push({
+        id: id.trim(),
+        relevance,
+        ...(typeof kind === "string" ? { kind } : {}),
+      });
+    }
+    if (parsed.length > 0) decision.rankedTools = parsed;
+  }
   if (
     typeof record["model_id"] === "string" &&
     record["model_id"].trim().length > 0
@@ -228,8 +274,58 @@ export type EffortResolution =
       readonly kind: "tier";
       readonly tier: EffortTier;
       readonly options: Required<ModelOptions>;
+      /**
+       * Set when the SystemOne uncertain rule raised the tier one level
+       * (Phase 3). Present for diagnostics only; the bound options already
+       * reflect `tier`.
+       */
+      readonly uncertainBump?: { readonly from: EffortTier; readonly to: EffortTier };
     }
   | { readonly kind: "off" };
+
+/** Outcome of the Phase-3 uncertain adjustment (pure). */
+export interface UncertainEffortAdjustment {
+  readonly thinking: ResolvedThinking | undefined;
+  /** True when the uncertain rule raised the tier one level. */
+  readonly bumped: boolean;
+  readonly fromTier?: EffortTier;
+  readonly toTier?: EffortTier;
+}
+
+/**
+ * Phase-3 uncertain rule (effort half): when the route says
+ * `uncertain === true`, route-driven effort moves up one tier
+ * (low→medium→high→xhigh→ultra; ultra stays).
+ *
+ * Explicit user choices are sacred and never bumped: thinkingMode
+ * "off", a pinned thinking tier, or a legacy config.effortTier pin all
+ * pass through untouched. Thinking "off" resolves to the low policy row
+ * downstream, unchanged. Pure; never throws.
+ */
+export function adjustEffortForUncertainty(
+  thinking: ResolvedThinking | undefined,
+  route: SystemOneRouteDecision | undefined,
+  config: SpeedStackSessionConfig | undefined,
+): UncertainEffortAdjustment {
+  const passthrough: UncertainEffortAdjustment = { thinking, bumped: false };
+  try {
+    if (route?.uncertain !== true) return passthrough;
+    if (!thinking || thinking.kind !== "tier") return passthrough;
+    const mode: ThinkingMode | undefined = config?.thinkingMode;
+    if (mode !== undefined && mode !== "auto") return passthrough;
+    if (config?.effortTier) return passthrough;
+    const toTier = bumpEffortTier(thinking.tier);
+    if (toTier === thinking.tier) return passthrough;
+    return {
+      thinking: { kind: "tier", tier: toTier },
+      bumped: true,
+      fromTier: thinking.tier,
+      toTier,
+    };
+  } catch {
+    return passthrough;
+  }
+}
 
 /**
  * Resolve the effective thinking for one task and its concrete ModelOptions
@@ -255,10 +351,15 @@ export function resolveEffortTierAndOptions(input: {
   });
   if (!thinking) return undefined;
   if (thinking.kind === "off") return { kind: "off" };
+  const adjusted = adjustEffortForUncertainty(thinking, input.route, input.config);
+  const tier = adjusted.thinking?.kind === "tier" ? adjusted.thinking.tier : thinking.tier;
   return {
     kind: "tier",
-    tier: thinking.tier,
-    options: effortTierToModelOptions(input.model, thinking.tier),
+    tier,
+    options: effortTierToModelOptions(input.model, tier),
+    ...(adjusted.bumped && adjusted.fromTier && adjusted.toTier
+      ? { uncertainBump: { from: adjusted.fromTier, to: adjusted.toTier } }
+      : {}),
   };
 }
 
@@ -303,6 +404,15 @@ export function applySystemOneEffortOverride<
         reasoningLevel: offLevel,
       });
       return model.bind({ ...model.options, reasoningLevel: offLevel });
+    }
+    if (resolved.uncertainBump) {
+      logger?.debug("SystemOne uncertain effort bump applied", {
+        event: "systemone.effort.uncertain_bump",
+        module: "core.speedstack",
+        fromTier: resolved.uncertainBump.from,
+        toTier: resolved.uncertainBump.to,
+        reason: "route uncertain=true: no tool pruning, effort +1 tier",
+      });
     }
     logger?.debug("SystemOne effort override applied", {
       effortTier: resolved.tier,
@@ -415,6 +525,14 @@ export function resolveMcpAttachPolicy(
       const reason = "kill-switch: SpeedStackSessionConfig.mcpPruning=false";
       return { attachMcp: true, reason, toolPolicy: { mode: "all", reason } };
     }
+    if (route?.uncertain === true) {
+      // Phase-3 uncertain rule: an uncertain route NEVER prunes. The
+      // classifier didn't commit, so the full tool surface stays available
+      // and effort is raised elsewhere (adjustEffortForUncertainty).
+      const reason =
+        "route uncertain=true: no tool/MCP pruning (fail-open), effort bumped separately";
+      return { attachMcp: true, reason, toolPolicy: { mode: "all", reason } };
+    }
     if (
       route &&
       route.tier === "economy" &&
@@ -490,6 +608,12 @@ export interface SystemOneBehaviorPolicyResolution {
   /** The behavior policy row, or undefined when no tier resolved. */
   readonly policy: EffortBehaviorPolicy | undefined;
   /**
+   * Set when the SystemOne uncertain rule raised the tier one level
+   * (Phase 3) — diagnostics for the planner rationale. The tier/policy/
+   * budgets above already reflect the bumped tier.
+   */
+  readonly uncertainBump?: { readonly from: EffortTier; readonly to: EffortTier };
+  /**
    * Effective per-turn budgets: policy-table raised defaults merged with the
    * package-1 ZCODE_BUDGET_* env surface (env wins). {} = unbounded.
    */
@@ -498,11 +622,14 @@ export interface SystemOneBehaviorPolicyResolution {
 
 /**
  * Resolve the effort behavior policy + effective turn budgets for the
- * current task, alongside applySystemOneEffortOverride. Never throws.
+ * current task, alongside applySystemOneEffortOverride. Applies the
+ * Phase-3 uncertain rule (uncertain route -> effort +1 tier, logged for
+ * the planner rationale). Never throws.
  */
 export function resolveSystemOneBehaviorPolicy(
   holder: SystemOneRouteHolder,
   env: NodeJS.ProcessEnv = process.env,
+  logger?: Logger,
 ): SystemOneBehaviorPolicyResolution {
   try {
     const thinking = resolveThinkingTier({
@@ -510,10 +637,16 @@ export function resolveSystemOneBehaviorPolicy(
       explicitTier: holder.speedStackConfig?.effortTier,
       routeHint: extractRouteEffortHint(holder.systemOneRouteValue),
     });
+    const adjusted = adjustEffortForUncertainty(
+      thinking,
+      holder.systemOneRouteValue,
+      holder.speedStackConfig,
+    );
+    const adjustedThinking = adjusted.thinking;
     const tier =
-      thinking?.kind === "tier"
-        ? thinking.tier
-        : thinking?.kind === "off"
+      adjustedThinking?.kind === "tier"
+        ? adjustedThinking.tier
+        : adjustedThinking?.kind === "off"
           ? ("low" as EffortTier)
           : undefined;
     const policy = tier ? getEffortBehaviorPolicy(tier, env) : undefined;
@@ -522,7 +655,20 @@ export function resolveSystemOneBehaviorPolicy(
       effortTier: tier,
       env,
     });
-    return { tier, policy, budgets };
+    const uncertainBump =
+      adjusted.bumped && adjusted.fromTier && adjusted.toTier
+        ? { from: adjusted.fromTier, to: adjusted.toTier }
+        : undefined;
+    if (uncertainBump) {
+      logger?.debug("SystemOne uncertain effort bump applied", {
+        event: "systemone.behavior.uncertain_bump",
+        module: "core.speedstack",
+        fromTier: uncertainBump.from,
+        toTier: uncertainBump.to,
+        reason: "route uncertain=true: no tool pruning, effort +1 tier",
+      });
+    }
+    return { tier, policy, budgets, ...(uncertainBump ? { uncertainBump } : {}) };
   } catch {
     return { tier: undefined, policy: undefined, budgets: {} };
   }

@@ -721,7 +721,7 @@ export async function executeTurnCommand(
         // read-only tools, then executor) when selected.
         const planExecuteGate = decidePlanThenExecute({
           explicitConfig: this.speedStackConfig.planThenExecute,
-          policy: resolveSystemOneBehaviorPolicy(this, process.env).policy,
+          policy: resolveSystemOneBehaviorPolicy(this, process.env, this.logger).policy,
           routeConfidence: routeDecision?.confidence,
           routeTier: routeDecision?.tier,
           taskLabels: routeDecision?.taskLabels,

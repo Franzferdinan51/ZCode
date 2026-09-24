@@ -13,6 +13,7 @@ import {
   computeToolShortlist,
   detectToolPackMissedCalls,
   estimateToolSchemaTokens,
+  rankedToolMatchesName,
   resolveActiveLabels,
   TOOL_PACK_CHARS_PER_TOKEN,
   TOOL_PACK_CORE_TOOLS,
@@ -274,4 +275,96 @@ test("computeToolShortlist echoes preserved route scores on pruned and fail-open
   const noRoute = computeToolShortlist({ route: undefined, tools: BUILTINS });
   assert.equal(noRoute.tierScores, undefined);
   assert.equal(noRoute.margin, undefined);
+});
+
+// ---------------------------------------------------------------
+// Phase 3: uncertain + ranked_tools decision surfaces
+// ---------------------------------------------------------------
+
+test("uncertain route disables tool pruning (fail-open)", () => {
+  const shortlist = computeToolShortlist({
+    route: { ...HIGH_CONF, taskLabels: ["files"], uncertain: true },
+    taskText: "rename a file",
+    tools: BUILTINS,
+  });
+  assert.equal(shortlist.pruned, false);
+  assert.equal(shortlist.keepNames.size, BUILTINS.length);
+  assert.match(shortlist.reason, /uncertain/);
+});
+
+test("uncertain route disables MCP server pruning", () => {
+  const shortlist = computeServerShortlist({
+    route: { ...HIGH_CONF, taskLabels: ["files"], uncertain: true },
+    taskText: "rename a file",
+    serverNames: ["browser-use", "filesystem"],
+  });
+  assert.equal(shortlist.pruned, false);
+  assert.deepEqual([...shortlist.keepServers], ["browser-use", "filesystem"]);
+  assert.match(shortlist.reason, /uncertain/);
+});
+
+test("ranked_tools keep a tool the label path would prune", () => {
+  const tools: ToolSchemaDescriptor[] = [
+    ...BUILTINS,
+    descriptor("mcp__browser__navigate"),
+  ];
+  const shortlist = computeToolShortlist({
+    route: {
+      ...HIGH_CONF,
+      taskLabels: ["files"],
+      rankedTools: [{ id: "browser-use", relevance: 0.91 }],
+    },
+    taskText: "rename a file",
+    tools,
+    isMcpTool: (name) => name.startsWith("mcp__"),
+    mcpServerOf: (name) =>
+      name === "mcp__browser__navigate" ? "browser-use" : undefined,
+  });
+  assert.ok(
+    shortlist.keepNames.has("mcp__browser__navigate"),
+    "shim-ranked tool id matching the MCP server keeps the tool",
+  );
+  assert.ok(!shortlist.disallowedNames.has("mcp__browser__navigate"));
+});
+
+test("ranked_tools keep a server the label path would prune", () => {
+  const shortlist = computeServerShortlist({
+    route: {
+      ...HIGH_CONF,
+      taskLabels: ["files"],
+      rankedTools: [{ id: "browser-use", relevance: 0.91 }],
+    },
+    taskText: "rename a file",
+    serverNames: ["browser-use", "filesystem"],
+  });
+  assert.ok(shortlist.keepServers.includes("browser-use"));
+  assert.ok(shortlist.pruned === false || !shortlist.prunedServers.includes("browser-use"));
+});
+
+test("ranked_tools never prune: unknown ids change nothing", () => {
+  const withoutRanked = computeToolShortlist({
+    route: { ...HIGH_CONF, taskLabels: ["files"] },
+    taskText: "rename a file",
+    tools: BUILTINS,
+  });
+  const withRanked = computeToolShortlist({
+    route: {
+      ...HIGH_CONF,
+      taskLabels: ["files"],
+      rankedTools: [{ id: "zzz-no-such-tool", relevance: 0.99 }],
+    },
+    taskText: "rename a file",
+    tools: BUILTINS,
+  });
+  assert.deepEqual(
+    [...withRanked.disallowedNames].sort(),
+    [...withoutRanked.disallowedNames].sort(),
+  );
+});
+
+test("rankedToolMatchesName fuzzy-matches separators, rejects junk", () => {
+  assert.equal(rankedToolMatchesName("browser-claw", "browserclaw"), true);
+  assert.equal(rankedToolMatchesName("browserclaw", "mcp__browserclaw__navigate"), true);
+  assert.equal(rankedToolMatchesName("ab", "abc"), false);
+  assert.equal(rankedToolMatchesName("weather", "Read"), false);
 });

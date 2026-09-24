@@ -326,11 +326,28 @@ export interface ToolPackRouteView {
   readonly confidence: number;
   readonly taskLabels?: readonly string[] | undefined;
   /**
+   * True when the shim flagged the route as uncertain (Phase 3): no
+   * pruning at all — the full tool surface stays available.
+   */
+  readonly uncertain?: boolean | undefined;
+  /**
+   * Shim-scored tool/MCP relevance ranking (Phase 3, advisory): entries
+   * are keep-signals only, never prune-signals. Absent on older shims.
+   */
+  readonly rankedTools?: readonly ToolPackRankedTool[] | undefined;
+  /**
    * Preserved per-tier scores / top-1-vs-top-2 margin (see
    * SystemOneRouteDecision). Optional: informational only, never gated on.
    */
   readonly tierScores?: Readonly<Record<string, number>> | undefined;
   readonly margin?: number | undefined;
+}
+
+/** One advisory keep-signal from the shim's ranked_tools surface. */
+export interface ToolPackRankedTool {
+  readonly id: string;
+  readonly relevance: number;
+  readonly kind?: string | undefined;
 }
 
 /** Minimal structural view of the session config pruning flag. */
@@ -347,6 +364,49 @@ export interface ToolSchemaDescriptor {
 
 /** Heuristic for schema-token estimation: ~4 chars per token. */
 export const TOOL_PACK_CHARS_PER_TOKEN = 4;
+
+/**
+ * Normalize a tool/server/ranked id for fuzzy matching: lowercase,
+ * separators stripped, so "browser-claw" matches "browserclaw".
+ */
+function normalizeRankName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/**
+ * Advisory keep-signal match (Phase 3): a shim-ranked tool id matches a
+ * local tool/server name when either normalized form contains the other.
+ * Minimum length 3 on both sides so junk ids never match. Pure.
+ */
+export function rankedToolMatchesName(rankedId: string, name: string): boolean {
+  try {
+    const id = normalizeRankName(rankedId);
+    const target = normalizeRankName(name);
+    return (
+      id.length >= 3 && target.length >= 3 && (id.includes(target) || target.includes(id))
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Collect the ranked tool ids worth treating as keep-signals. */
+function collectRankedToolIds(
+  route: ToolPackRouteView | undefined,
+): Set<string> {
+  const ids = new Set<string>();
+  try {
+    for (const ranked of route?.rankedTools ?? []) {
+      const id = ranked?.id;
+      if (typeof id === "string" && id.trim().length > 0) {
+        ids.add(id.trim());
+      }
+    }
+  } catch {
+    // Fail-open: no ranked keeps.
+  }
+  return ids;
+}
 
 /**
  * Estimate the tokens a tool list costs as provider `tools` schemas.
@@ -465,6 +525,15 @@ export function computeToolShortlist(
     if (!route) {
       return fullAttach(tools, "no route decision (fail-open)", undefined, []);
     }
+    if (route.uncertain === true) {
+      // Phase-3 uncertain rule: an uncertain route NEVER prunes tools.
+      return fullAttach(
+        tools,
+        "route uncertain=true: no tool pruning (fail-open)",
+        route,
+        [],
+      );
+    }
     if (
       typeof route.confidence !== "number" ||
       route.confidence < TOOL_PACK_PRUNE_CONFIDENCE_THRESHOLD
@@ -497,11 +566,36 @@ export function computeToolShortlist(
     }
     const keepNames = new Set<string>();
     const disallowedNames = new Set<string>();
+    // Phase 3: shim-ranked tools are advisory keep-signals. A ranked id
+    // matching a tool (or its MCP server) keeps it; ranked ids NEVER
+    // prune — anything they don't name still goes through the label path.
+    const rankedToolIds = collectRankedToolIds(route);
+    let rankedKeptCount = 0;
     for (const tool of tools) {
       const lowerName = tool.name.toLowerCase();
       if (keepTools.has(lowerName)) {
         keepNames.add(tool.name);
         continue;
+      }
+      if (rankedToolIds.size > 0) {
+        const serverName = input.mcpServerOf?.(tool.name);
+        let matched = false;
+        for (const rankedId of rankedToolIds) {
+          if (
+            rankedToolMatchesName(rankedId, tool.name) ||
+            (serverName !== undefined &&
+              serverName.length > 0 &&
+              rankedToolMatchesName(rankedId, serverName))
+          ) {
+            matched = true;
+            break;
+          }
+        }
+        if (matched) {
+          keepNames.add(tool.name);
+          rankedKeptCount++;
+          continue;
+        }
       }
       const serverName = input.mcpServerOf?.(tool.name);
       const isMcp = serverName !== undefined || input.isMcpTool?.(tool.name) === true;
@@ -539,7 +633,8 @@ export function computeToolShortlist(
       margin: route.margin,
       reason:
         `route tier=${route.tier} confidence=${route.confidence} ` +
-        `labels=[${labels.join(",")}] kept=${keepNames.size}/${tools.length}`,
+        `labels=[${labels.join(",")}] rankedKeeps=${rankedKeptCount} ` +
+        `kept=${keepNames.size}/${tools.length}`,
       schemaTokensBefore: estimateToolSchemaTokens(tools),
       schemaTokensAfter: estimateToolSchemaTokens(keptTools),
     };
@@ -603,6 +698,16 @@ export function computeServerShortlist(
         reason: "no route decision (fail-open)",
       };
     }
+    if (route.uncertain === true) {
+      // Phase-3 uncertain rule: an uncertain route NEVER prunes servers.
+      return {
+        pruned: false,
+        keepServers: [...input.serverNames],
+        prunedServers: [],
+        labels: [],
+        reason: "route uncertain=true: no MCP server pruning (fail-open)",
+      };
+    }
     if (
       typeof route.confidence !== "number" ||
       route.confidence < TOOL_PACK_PRUNE_CONFIDENCE_THRESHOLD
@@ -625,16 +730,22 @@ export function computeServerShortlist(
     }
     const keepServers: string[] = [];
     const prunedServers: string[] = [];
+    // Phase 3: shim-ranked tools are advisory keep-signals for servers
+    // too — a ranked id matching a server name keeps that server.
+    const rankedToolIds = collectRankedToolIds(route);
     for (const serverName of input.serverNames) {
       const lowerServer = serverName.toLowerCase();
       const matchesKept = [...keepServerSubstrings].some((substring) =>
         lowerServer.includes(substring),
       );
+      const matchesRanked = [...rankedToolIds].some((rankedId) =>
+        rankedToolMatchesName(rankedId, serverName),
+      );
       const matchesKnownIrrelevant = TOOL_PACK_KNOWN_SERVER_SUBSTRINGS.some(
         (substring) =>
           !keepServerSubstrings.has(substring) && lowerServer.includes(substring),
       );
-      if (matchesKept || !matchesKnownIrrelevant) {
+      if (matchesKept || matchesRanked || !matchesKnownIrrelevant) {
         keepServers.push(serverName);
       } else {
         prunedServers.push(serverName);
@@ -647,7 +758,8 @@ export function computeServerShortlist(
       labels,
       reason:
         `route tier=${route.tier} confidence=${route.confidence} ` +
-        `labels=[${labels.join(",")}] kept servers=${keepServers.length}/${input.serverNames.length}`,
+        `labels=[${labels.join(",")}] rankedToolIds=${rankedToolIds.size} ` +
+        `kept servers=${keepServers.length}/${input.serverNames.length}`,
     };
   } catch {
     return {
