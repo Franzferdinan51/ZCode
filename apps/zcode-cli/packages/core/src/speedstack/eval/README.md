@@ -19,6 +19,21 @@ tsx src/speedstack/eval/run.ts policy --offline
 tsx src/speedstack/eval/run.ts smoke
 ```
 
+> **Ryan's rule — no unsolicited model activity.** Eval and smoke tooling
+> must never invoke the models. SystemOne routing fires only inside the
+> turn loop, in direct response to a user turn; if the app isn't being
+> used, nothing may touch the model server. Concretely:
+>
+> - `policy` / `replay` modes never contact the model server at all.
+> - `smoke` mode's LM Studio reachability probe is **opt-in**:
+>   `ZCODE_EVAL_LIVE=1 tsx src/speedstack/eval/run.ts smoke`.
+>   Without it, the probe is skipped and reported as `skipped`.
+> - No speedstack source may reference inference endpoints
+>   (`chat/completions`, `/v1/embeddings`) — enforced by
+>   `src/speedstack/no-live-inference.test.ts`.
+> - Ship smoke tests run against **whatever model is already loaded** and
+>   must never `lms load`/`lms unload` anything as a side effect.
+
 Reports are JSON on stdout; a human summary goes to stderr. `--out <file>`
 writes the JSON to a file instead.
 

@@ -136,7 +136,7 @@ export interface HarnessReport {
   timestamp: string;
   replayOf?: string;
   shim: { endpoint: string; reachable: boolean; latencyMs?: number };
-  lmstudio: { endpoint: string; reachable: boolean; models?: string[] };
+  lmstudio: { endpoint: string; reachable: boolean; models?: string[]; skipped?: string };
   budgets: Record<string, TurnBudgets>;
   tasks: HarnessTaskResult[];
   summary: {
@@ -413,7 +413,13 @@ export async function runSmokeMode(options: HarnessOptions): Promise<HarnessRepo
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ task: "smoke test" }),
   });
-  const lmstudio = await checkHttp(LM_STUDIO_MODELS_ENDPOINT);
+  // Live LM Studio probe is opt-in. Default: eval tooling never touches the
+  // model server — Ryan's rule is that nothing invokes the models unless the
+  // app is being used. Set ZCODE_EVAL_LIVE=1 to probe the live server.
+  const evalLive = process.env.ZCODE_EVAL_LIVE === "1";
+  const lmstudio = evalLive
+    ? await checkHttp(LM_STUDIO_MODELS_ENDPOINT)
+    : { reachable: false, latencyMs: undefined as number | undefined, json: undefined as unknown };
   const models =
     lmstudio.json && typeof lmstudio.json === "object" && Array.isArray((lmstudio.json as { data?: unknown }).data)
       ? ((lmstudio.json as { data: { id?: string }[] }).data.map((m) => m.id ?? "?"))
@@ -429,6 +435,7 @@ export async function runSmokeMode(options: HarnessOptions): Promise<HarnessRepo
     endpoint: LM_STUDIO_MODELS_ENDPOINT,
     reachable: lmstudio.reachable,
     ...(models ? { models } : {}),
+    ...(!evalLive ? { skipped: "set ZCODE_EVAL_LIVE=1 to probe the live model server" } : {}),
   };
   return report;
 }
