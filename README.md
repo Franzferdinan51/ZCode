@@ -94,15 +94,29 @@ config or env, tunable without a release, and model choice always flows
 from the router, the registry, or explicit user config — no hard-coded
 model IDs.
 
+**Decision engine:** the router is SystemOne — a **Jev-style**
+typed-decision layer over local GLiClass checkpoints ("tiny decides, big
+works"). Each call returns a scored decision in ~100 ms: per-tier
+probabilities, top-1/top-2 margins, and an uncertainty flag; the scores are
+calibrated, then drive tier, effort, expected-utility model ranking,
+tool/MCP relevance ranking, and plan ranking. It is advisory-only and
+fail-open, and lives in the Python shim (`python -m systemone.shim`,
+`http://127.0.0.1:8765`). Details: https://github.com/Franzferdinan51/SystemOne.
+
 Jeff-1-backed plan ranking: `plan-execute` asks the shim for N
 candidate plans and posts them to `/v1/systemone/rank-plans`, executing the
 winner. The ranking blends the GLiClass score 50/50 with **Jeff-1**
 ([GestaltLabs/Jeff-1](https://huggingface.co/GestaltLabs/Jeff-1) — Apache 2.0,
-LoRA on [Qwen3-4B-Instruct-2507](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507));
+LoRA on [Qwen3-4B-Instruct-2507](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507)),
+an open-weight model trained for Jev-compatible typed decisions
+(`choice`, `score`, `noul`);
 the full ranking lands in run diagnostics. On uncertain routes the shim's
 `jeff1_second_opinion` is advisory-only — and the agent never prunes,
-bumps effort one level, and records why. A down or slow Jeff-1 sidecar fails
-open with no behavior change.
+bumps effort one level, and records why. Jeff-1 runs as its own sidecar
+process (on by default; `SYSTEMONE_JEFF1=0` runs GLiClass-only) and fails
+open with no behavior change when down or slow. It never loads, unloads,
+switches, or competes with the loaded worker model — it lives on the Mac
+mini, never on the inference host.
 
 Kill switches (each disables only its own surface; all default on):
 
