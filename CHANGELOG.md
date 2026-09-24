@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.26.0 (2026-09-24)
+
+### Features
+
+* First-run onboarding wizard: `zcode onboard`
+  * Guided first-run setup for new users — walks through the essentials (providers/models, SystemOne routing defaults) so ZCode Local is usable out of the box with nothing to chase down
+
+### Documentation
+
+* README: Decision engine section — Jev-style classifier + Jeff-1 sidecar facts
+* README: Minimum requirements section (Node 24+, measured disk, inference requirements)
+
+
 ## 3.24.0 (2026-09-23)
 
 ### Features
